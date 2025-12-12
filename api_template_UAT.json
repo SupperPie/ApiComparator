@@ -1,0 +1,34 @@
+[
+  {
+    "id": "api_tpl_homepage_ui",
+    "name": "首页UI配置",
+    "relative_path": "/get",
+    "method": "GET",
+    "params": {
+      "configType": "UI",
+      "region": "CN"
+    },
+    "json_body": null,
+    "ignore_paths": [
+      "root['origin']",
+      "root['headers']"
+    ],
+    "ignore_order": false
+  },
+  {
+    "id": "api_tpl_marketing_features",
+    "name": "营销活动开关",
+    "relative_path": "/post",
+    "method": "POST",
+    "params": null,
+    "json_body": {
+      "userId": "test_user_001",
+      "userTag": "VIP"
+    },
+    "ignore_paths": [
+      "root['origin']",
+      "root['headers']"
+    ],
+    "ignore_order": false
+  }
+]

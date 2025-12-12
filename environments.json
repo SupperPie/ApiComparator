@@ -1,0 +1,23 @@
+[
+  {
+    "id": "env_old_prod",
+    "name": "[QA]SaaS 1.0 ",
+    "base_url": "https://ase-qa.dragonpass.com/client-api",
+    "headers": {},
+    "auth_token": ""
+  },
+  {
+    "id": "env_new_grey",
+    "name": "[QA]SaaS 2.0",
+    "base_url": "https://ase-qa.dragonpass.com/client-api",
+    "headers": {},
+    "auth_token": ""
+  },
+  {
+    "id": "env_new_dev",
+    "name": "[UAT]SaaS 1.0",
+    "base_url": "https://ase-uat.dragonpass.com/client-api",
+    "headers": {},
+    "auth_token": ""
+  }
+]

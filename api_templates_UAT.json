@@ -1,0 +1,167 @@
+[
+  {
+    "id": "092704bb-077e-4f19-afa1-e8a57d55613d",
+    "name": "T&C barclays",
+    "relative_path": "/tc/list",
+    "method": "POST",
+    "headers": {
+      "channel": "ASE"
+    },
+    "params": {},
+    "json_body": {
+      "channel": "barclays"
+    }
+  },
+  {
+    "id": "129f2974-0cf3-426e-aa91-31980350b353",
+    "name": "获取FAQ",
+    "relative_path": "/faq/list",
+    "method": "POST",
+    "headers": {
+      "channel": "ASE"
+    },
+    "params": {},
+    "json_body": {
+      "version": "1.3.14"
+    }
+  },
+  {
+    "id": "6fd066e7-d2af-4c35-b4e3-e366127238a9",
+    "name": "T&C Link Natwest",
+    "relative_path": "/tc/link",
+    "method": "POST",
+    "headers": {
+      "channel": "ASE"
+    },
+    "params": {},
+    "json_body": {
+      "channel": "natWest"
+    }
+  },
+  {
+    "id": "e7e3b871-5efe-4b7d-a0b2-d7f8b49761dc",
+    "name": "T&C Link Barclays",
+    "relative_path": "/tc/link",
+    "method": "POST",
+    "headers": {
+      "channel": "ASE"
+    },
+    "params": {},
+    "json_body": {
+      "channel": "barclays"
+    }
+  },
+  {
+    "id": "141305cd-d929-4f34-b5ed-8af19820ea69",
+    "name": "terms-use",
+    "relative_path": "/tc/web-url",
+    "method": "POST",
+    "headers": {
+      "channel": "ASE"
+    },
+    "params": {},
+    "json_body": {
+      "type": "terms-use"
+    }
+  },
+  {
+    "id": "318b6854-c1a2-4340-a285-df62dcf12500",
+    "name": "accessibility",
+    "relative_path": "/tc/web-url",
+    "method": "POST",
+    "headers": {
+      "channel": "ASE"
+    },
+    "params": {},
+    "json_body": {
+      "type": "accessibility"
+    }
+  },
+  {
+    "id": "95e47def-e2ab-4d7a-9d33-77d69cd6274f",
+    "name": "dining-terms",
+    "relative_path": "/tc/web-url",
+    "method": "POST",
+    "headers": {
+      "channel": "ASE"
+    },
+    "params": {},
+    "json_body": {
+      "type": "dining-terms"
+    }
+  },
+  {
+    "id": "6187aea2-0b75-495d-a273-f36802cf02c9",
+    "name": "privacy-policy",
+    "relative_path": "/tc/web-url",
+    "method": "POST",
+    "headers": {
+      "channel": "ASE"
+    },
+    "params": {},
+    "json_body": {
+      "type": "privacy-policy"
+    }
+  },
+  {
+    "id": "2f79ea00-8efb-467f-aaea-49f99539fc29",
+    "name": "visit-website",
+    "relative_path": "/tc/web-url",
+    "method": "POST",
+    "headers": {
+      "channel": " ASE"
+    },
+    "params": {},
+    "json_body": {
+      "type": "visit-website"
+    }
+  },
+  {
+    "id": "8f4435a3-cd3f-47b3-8c03-730321cf1683",
+    "name": "Web端调用",
+    "relative_path": "/tc/list",
+    "method": "POST",
+    "headers": {},
+    "params": {},
+    "json_body": {
+      "key": {}
+    }
+  },
+  {
+    "id": "f80b3d6a-6123-4aa4-9619-747b6230ecca",
+    "name": "App端 / Web端调用",
+    "relative_path": "/tc/link",
+    "method": "POST",
+    "headers": {},
+    "params": {},
+    "json_body": {
+      "key": {}
+    }
+  },
+  {
+    "id": "d3d4ad93-18be-49ab-9564-5cfa61d77579",
+    "name": "3.2.获取t&c跳转网址V2(web/app)",
+    "relative_path": "/tc/link",
+    "method": "PUT",
+    "headers": {
+      "Content-Type": "application/json",
+      "app-version": "1.0.3",
+      "device": "android / iOS "
+    },
+    "params": {},
+    "json_body": {
+      "channel": "string_value"
+    }
+  },
+  {
+    "id": "896b21cc-4e43-4b45-965f-c4cd33f03007",
+    "name": "App端调用",
+    "relative_path": "/tc/web-url",
+    "method": "POST",
+    "headers": {},
+    "params": {},
+    "json_body": {
+      "key": {}
+    }
+  }
+]
