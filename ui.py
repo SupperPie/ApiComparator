@@ -754,7 +754,8 @@ def render_comparator(history_file):
                     })
                 
                 if debug_info:
-                    with st.expander("🐞 Debug Request Info"):
+                    # Nested expanders are not allowed. Use checkbox to toggle.
+                    if st.checkbox("🐞 Show Debug Info", key=f"debug_{api_id}_{res['timestamp']}"):
                         st.json(debug_info)
                 
                 st.markdown(generate_side_by_side_html(comparison_data), unsafe_allow_html=True)
