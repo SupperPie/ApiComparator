@@ -32,7 +32,7 @@ python-dotenv
 pytz
 PyYAML
 referencing
-requests
+requests>=2.27.0
 rpds-py
 six
 smmap

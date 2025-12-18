@@ -462,7 +462,7 @@ def render_configuration(api_template_file, env_config_file):
             if isinstance(x, (dict, list)): return json.dumps(x, ensure_ascii=False)
             return str(x) if x else ""
 
-        for json_col in ["headers", "params", "json_body"]:
+        for json_col in ["headers", "params", "json_body", "extract"]:
             if json_col in api_df.columns:
                 api_df[json_col] = api_df[json_col].apply(to_json_str)
 
@@ -488,17 +488,20 @@ def render_configuration(api_template_file, env_config_file):
         # Data Editor (Force Reload)
         edited_api_df = st.data_editor(
             api_df,
+
             column_config={
-                "Select": st.column_config.CheckboxColumn(required=True, width="small"),
-                "name": "API Name",
-                "relative_path": "Path",
-                "method": st.column_config.SelectboxColumn("Method", options=["GET", "POST", "PUT", "DELETE"], width="small"),
+                "Select": st.column_config.CheckboxColumn(required=True),
+                "id": st.column_config.TextColumn(disabled=True, width="small"),
+                "order": st.column_config.NumberColumn("Order", help="Execution Order (1, 2...)", default=0, width="small"),
+                "name": st.column_config.TextColumn("Name", width="medium"),
+                "relative_path": st.column_config.TextColumn("Path", width="medium"),
+                "method": st.column_config.SelectboxColumn("Method", options=["GET", "POST", "PUT", "DELETE", "PATCH"], width="small", required=True),
                 "headers": st.column_config.TextColumn("Headers (JSON)", width="medium"),
                 "params": st.column_config.TextColumn("Params (JSON)", width="medium"),
                 "json_body": st.column_config.TextColumn("Body (JSON)", width="medium"),
-                "id": st.column_config.TextColumn("ID", disabled=True, width="small"),
+                "extract": st.column_config.TextColumn("Extract (JSON)", width="medium", help='e.g. [{"source": "token", "target_var": "auth_token"}]'),
             },
-            column_order=["Select", "name", "relative_path", "method", "headers", "params", "json_body"],
+            column_order=["Select", "order", "name", "relative_path", "method", "headers", "params", "json_body", "extract"],
             use_container_width=True,
             hide_index=True,
             num_rows="dynamic"
@@ -522,16 +525,26 @@ def render_configuration(api_template_file, env_config_file):
 
                     if not row.get('id'): row['id'] = str(uuid.uuid4())
                     
-                    for field in ['params', 'json_body', 'headers']:
+                    # Ensure Order is int
+                    row['order'] = int(row.get('order', 0) or 0)
+
+                    for field in ['params', 'json_body', 'headers', 'extract']:
                         val = row.get(field)
                         if isinstance(val, str):
                             try:
-                                row[field] = json.loads(val) if val.strip() else None
+                                row[field] = json.loads(val) if val.strip() else (None if field != 'extract' else [])
+                                # Ensure extract is a list
+                                if field == 'extract' and not isinstance(row[field], list):
+                                     row[field] = []
                             except:
-                                row[field] = {} 
-                        if row.get('headers') is None: row['headers'] = {}
-                    
+                                row[field] = {} if field != 'extract' else []
+                        if field == 'headers' and row.get('headers') is None: row['headers'] = {}
+                        if field == 'extract' and row.get('extract') is None: row['extract'] = []
+
                     filtered_data.append(row)
+
+                # Sort by order then name
+                filtered_data.sort(key=lambda x: (x.get('order', 0), x.get('name', '')))
 
                 st.session_state.api_templates = filtered_data
                 save_json_file(api_template_file, st.session_state.api_templates)
@@ -560,41 +573,128 @@ def render_configuration(api_template_file, env_config_file):
                     
     with tab2:
         st.subheader("Manage Environments")
-        env_df = pd.DataFrame(st.session_state.environments)
         
-        # Ensure auth_token column exists
-        if "auth_token" not in env_df.columns:
-            env_df["auth_token"] = ""
+        # 1. Master List (Environments)
+        # Load and ensure structure
+        env_list = st.session_state.environments
+        for e in env_list:
+            if "variables" not in e: e["variables"] = []
+            if isinstance(e["variables"], str):
+                 try: e["variables"] = json.loads(e["variables"]) 
+                 except: e["variables"] = []
+            if isinstance(e["variables"], dict):
+                 # Convert old dict format to list
+                 e["variables"] = [{"key": k, "value": v, "description": ""} for k,v in e["variables"].items()]
             
-        edited_env_df = st.data_editor(
-            env_df,
-            num_rows="dynamic",
-            column_config={
-                "id": st.column_config.TextColumn(disabled=True, width="small"),
-                "name": "Name",
-                "base_url": "Base URL",
-                "auth_token": st.column_config.TextColumn("Auth Token", width="medium", help="Bearer ..."),
-                "headers": st.column_config.TextColumn("Extra Headers (JSON)", width="large"),
-            },
-            use_container_width=True,
-            key="env_editor"
-        )
+            # Ensure other fields
+            if "auth_token" not in e: e["auth_token"] = ""
+            if "headers" not in e: e["headers"] = {}
+
+        env_df = pd.DataFrame(env_list)
+        if env_df.empty:
+             env_df = pd.DataFrame(columns=["name", "base_url", "auth_token", "variables", "headers"])
         
-        if st.button("Save Environments"):
-            cleaned_data = json.loads(edited_env_df.to_json(orient="records"))
-            for row in cleaned_data:
-                if not row.get('id'):
-                    row['id'] = str(uuid.uuid4())
-                if isinstance(row.get('headers'), str):
-                    try:
-                        row['headers'] = json.loads(row['headers']) if row['headers'].strip() else {}
-                    except json.JSONDecodeError:
-                        st.warning(f"Invalid JSON in headers for {row.get('name')}.")
-                        row['headers'] = {}
+        # We use data_editor for adding/removing environments, but hiding complex columns
+        col_list, col_detail = st.columns([2, 3])
+        
+        with col_list:
+            st.markdown("#### 1. Environment List")
+            edited_env_df = st.data_editor(
+                env_df,
+                num_rows="dynamic",
+                column_config={
+                    "id": st.column_config.TextColumn(disabled=True, width="small"),
+                    "name": "Name",
+                    "base_url": "Base URL",
+                },
+                column_order=["name", "base_url"], # Hide others
+                use_container_width=True,
+                key="env_master_editor"
+            )
+            
+            # Save List Changes (Add/Remove)
+            if st.button("💾 Save Environment List", key="save_env_list"):
+                 # Re-merge logic for list changes
+                 updated_envs = json.loads(edited_env_df.to_json(orient="records"))
+                 
+                 # Prepare final list to save
+                 for row in updated_envs:
+                     if "id" not in row or not row["id"]:
+                         row["id"] = str(uuid.uuid4())
+                     # Ensure nested list structure if new (pandas might drop empty cols)
+                     if "variables" not in row or row["variables"] is None:
+                         row["variables"] = []
+                     if "headers" not in row or row["headers"] is None:
+                         row["headers"] = {}
+                 
+                 st.session_state.environments = updated_envs
+                 save_json_file(env_config_file, st.session_state.environments)
+                 st.success("Environment List Saved!")
+                 st.rerun()
+
+        # 2. Detail View (Select to Edit)
+        with col_detail:
+            st.markdown("#### 2. Configure Variables")
+            
+            # Selector
+            # Ensure name is not None or Empty
+            env_options = {e['id']: (e.get('name') or 'Unnamed') for e in st.session_state.environments}
+            if not env_options:
+                st.info("Create an environment first.")
+            else:
+                current_env_id = st.selectbox("Select Environment to Edit:", list(env_options.keys()), format_func=lambda x: env_options[x])
+                
+                # Find the env object reference in session_state (mutable)
+                target_env = next((e for e in st.session_state.environments if e['id'] == current_env_id), None)
+                
+                if target_env:
+                    st.caption(f"Editing: **{target_env.get('name')}**")
                     
-            st.session_state.environments = cleaned_data
-            save_json_file(env_config_file, st.session_state.environments)
-            st.success("Environments Saved!")
+                    # Auth Token & Headers (Global for Env)
+                    with st.expander("🔑 Auth & Headers", expanded=False):
+                        target_env['auth_token'] = st.text_input("Auth Token (Optional)", value=target_env.get('auth_token', ''))
+                        
+                        # Headers (JSON)
+                        headers_str = json.dumps(target_env.get('headers', {}), indent=2)
+                        new_headers_str = st.text_area("Extra Headers (JSON)", value=headers_str, height=100)
+                        try:
+                            target_env['headers'] = json.loads(new_headers_str)
+                        except:
+                            st.warning("Invalid JSON for headers")
+
+                    # Variables Editor (List)
+                    var_list = target_env.get('variables', [])
+                    # Ensure it's a list (fix potential data issues)
+                    if not isinstance(var_list, list): var_list = []
+                    
+                    var_df = pd.DataFrame(var_list)
+                    if var_df.empty:
+                        var_df = pd.DataFrame(columns=["key", "value", "description"])
+                    
+                    edited_vars = st.data_editor(
+                        var_df,
+                        num_rows="dynamic",
+                        column_config={
+                            "key": st.column_config.TextColumn("Variable", required=True), # Renamed to standard "Variable"
+                            "value": st.column_config.TextColumn("Value", width="medium"),
+                            "description": st.column_config.TextColumn("Description", width="large"),
+                        },
+                        column_order=["key", "value", "description"],
+                        use_container_width=True,
+                        key=f"var_editor_{current_env_id}"
+                    )
+                    
+                    if st.button("💾 Save Configuration", key="save_env_vars"):
+                        # Update the target_env variables
+                        new_vars_list = json.loads(edited_vars.to_json(orient="records"))
+                        # Filter empty keys
+                        new_vars_list = [v for v in new_vars_list if v.get('key')]
+                        
+                        target_env['variables'] = new_vars_list
+                        
+                        # Save entire environments file
+                        save_json_file(env_config_file, st.session_state.environments)
+                        st.success(f"Saved configuration for {target_env.get('name')}")
 def render_comparator(history_file):
     st.title("🚀 Comparator")
     
@@ -606,7 +706,7 @@ def render_comparator(history_file):
         selected_env_ids = []
         for i, env in enumerate(st.session_state.environments):
             col = cols[i % 4]
-            if col.checkbox(env['name'], key=f"env_select_{env['id']}"):
+            if col.checkbox(env.get('name') or "Unnamed", key=f"env_select_{env['id']}"):
                 selected_env_ids.append(env['id'])
         # Helper to stringify JSON
         def to_json_str(x):
@@ -624,34 +724,48 @@ def render_comparator(history_file):
         with col_btn:
             start_clicked = st.button("▶ Compare", type="primary", use_container_width=True)
 
-        api_display_df = pd.DataFrame([
-            {
-                "Selected": False, 
-                "Name": t['name'], 
-                "Path": t['relative_path'], 
-                "ID": t['id'],
-                "Params": to_json_str(t.get('params')),
-                "Body": to_json_str(t.get('json_body'))
-            }
-            for t in st.session_state.api_templates
-        ])
+        if not st.session_state.api_templates:
+            api_display_df = pd.DataFrame(columns=["Selected", "Name", "Path", "ID", "Params", "Body"])
+        else:
+            api_display_df = pd.DataFrame([
+                {
+                    "Selected": False,
+                    "Name": t['name'], 
+                    "Path": t['relative_path'], 
+                    "ID": t['id'],
+                    "Params": to_json_str(t.get('params')),
+                    "Body": to_json_str(t.get('json_body'))
+                }
+                for t in st.session_state.api_templates
+            ])
         
         edited_selection = st.data_editor(
             api_display_df,
             column_config={
                 "Selected": st.column_config.CheckboxColumn(required=True, width="small"),
-                # "ID": "ID", # No hidden support, just exclude from order
-                "Name": st.column_config.TextColumn(width="medium"),
-                "Path": st.column_config.TextColumn(width="medium"),
-                "Params": st.column_config.TextColumn(width="medium", help="JSON Params"),
-                "Body": st.column_config.TextColumn(width="medium", help="JSON Body"),
+                "ID": st.column_config.TextColumn("ID", width="small", disabled=True), 
+                "Name": st.column_config.TextColumn(width="medium", disabled=True),
+                "Path": st.column_config.TextColumn(width="medium", disabled=True),
+                "Params": st.column_config.TextColumn(width="medium", help="JSON Params", disabled=True),
+                "Body": st.column_config.TextColumn(width="medium", help="JSON Body", disabled=True),
             },
-            column_order=["Selected", "Name", "Path", "Params", "Body"], # ID removed from view
+            column_order=["Selected", "Name", "Path", "Params", "Body", "ID"], 
             hide_index=True,
-            use_container_width=True
+            use_container_width=True,
+            key="comparator_api_selector_v2" # Force reset
         )
         
-        selected_api_ids = edited_selection[edited_selection["Selected"]]["ID"].tolist()
+        # Robust Selection: Use index to find selected rows
+        # st.data_editor returns a dataframe with the same index as input
+        # We find indices where 'Selected' is True
+        try:
+            selected_indices = edited_selection.index[edited_selection["Selected"]].tolist()
+            # Map back to original IDs using these indices
+            # Note: api_display_df uses default range index 0..N which matches session_state.api_templates
+            selected_api_ids = [st.session_state.api_templates[i]['id'] for i in selected_indices if i < len(st.session_state.api_templates)]
+        except Exception as e:
+            st.error(f"Selection Error: {e}")
+            selected_api_ids = []
         
         if start_clicked:
             if len(selected_env_ids) < 2:
@@ -754,7 +868,8 @@ def render_comparator(history_file):
                     })
                 
                 if debug_info:
-                    with st.expander("🐞 Debug Request Info"):
+                    # Nested expanders are not allowed. Use checkbox to toggle.
+                    if st.checkbox("🐞 Show Debug Info", key=f"debug_{api_id}_{res['timestamp']}"):
                         st.json(debug_info)
                 
                 st.markdown(generate_side_by_side_html(comparison_data), unsafe_allow_html=True)
@@ -801,31 +916,38 @@ def render_debugger():
     # Also allow forcing a reset
     if 'debug_api_id' not in st.session_state or st.session_state.debug_api_id != selected_api_id:
         st.session_state.debug_api_id = selected_api_id
-        st.session_state.debug_method = selected_api['method']
-        st.session_state.debug_path = selected_api['relative_path']
-        st.session_state.debug_params = json.dumps(selected_api.get('params'), indent=2, ensure_ascii=False) if selected_api.get('params') else "{}"
-        st.session_state.debug_params = json.dumps(selected_api.get('params'), indent=2, ensure_ascii=False) if selected_api.get('params') else "{}"
-        st.session_state.debug_body = json.dumps(selected_api.get('json_body'), indent=2, ensure_ascii=False) if selected_api.get('json_body') else "{}"
         
-        # Merge Env Headers and API Headers for display
-        env_headers = selected_env.get('headers', {}) if selected_env else {}
-        if isinstance(env_headers, str):
-             try: env_headers = json.loads(env_headers)
-             except: env_headers = {}
-        if not isinstance(env_headers, dict):
-            env_headers = {}
-             
-        api_headers = selected_api.get('headers', {}) if selected_api else {}
-        # If api_headers is string (from older config), parse it
-        if isinstance(api_headers, str):
-             try: api_headers = json.loads(api_headers)
-             except: api_headers = {}
-        if not isinstance(api_headers, dict):
-            api_headers = {}
+        # Only update if we have a valid selected_api
+        if selected_api:
+            st.session_state.debug_method = selected_api.get('method', 'GET')
+            st.session_state.debug_path = selected_api.get('relative_path', '')
+            st.session_state.debug_params = json.dumps(selected_api.get('params', {}), indent=2, ensure_ascii=False) if selected_api.get('params') else "{}"
+            st.session_state.debug_body = json.dumps(selected_api.get('json_body', {}), indent=2, ensure_ascii=False) if selected_api.get('json_body') else "{}"
+            
+            # Merge Env Headers and API Headers for display
+            env_headers = selected_env.get('headers', {}) if selected_env else {}
+            if isinstance(env_headers, str):
+                try: env_headers = json.loads(env_headers)
+                except: env_headers = {}
+            if not isinstance(env_headers, dict):
+                env_headers = {}
+                
+            api_headers = selected_api.get('headers', {})
+            if isinstance(api_headers, str):
+                try: api_headers = json.loads(api_headers)
+                except: api_headers = {}
+            if not isinstance(api_headers, dict):
+                api_headers = {}
 
-        # Combined default
-        combined_headers = {**env_headers, **api_headers}
-        st.session_state.debug_headers = json.dumps(combined_headers, indent=2, ensure_ascii=False)
+            combined_headers = {**env_headers, **api_headers}
+            st.session_state.debug_headers = json.dumps(combined_headers, indent=2, ensure_ascii=False)
+        else:
+             # Default if no API selected
+             st.session_state.debug_method = "GET"
+             st.session_state.debug_path = ""
+             st.session_state.debug_headers = "{}"
+             st.session_state.debug_params = "{}"
+             st.session_state.debug_body = "{}"
 
     if st.button("🔄 Reset to Defaults"):
         del st.session_state['debug_api_id']

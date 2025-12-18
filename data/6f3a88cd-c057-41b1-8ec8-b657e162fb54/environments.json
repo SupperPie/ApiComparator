@@ -1,0 +1,37 @@
+[
+  {
+    "name": "[QA]New",
+    "base_url": "https://ase-qa.dragonpass.com/client-api",
+    "auth_token": "dd5bf520acd945d9b2fe7bce9ff3b525",
+    "variables": [],
+    "headers": {},
+    "id": "a0933e5c-5bef-4f07-bee1-993cd9e6ffea"
+  },
+  {
+    "name": "[UAT]Old",
+    "base_url": "https://ase-uat.dragonpass.com/client-api",
+    "auth_token": "dd5bf520acd945d9b2fe7bce9ff3b525",
+    "variables": [
+      {
+        "key": "LOGIN_USERNAME",
+        "value": "apc_uat_api@yopmail.com",
+        "description": null
+      },
+      {
+        "key": "LOGIN_PASSWORD",
+        "value": "Aa1234567!",
+        "description": null
+      }
+    ],
+    "headers": {},
+    "id": "67adb084-e3d7-4c3c-8b27-dc7f261720b3"
+  },
+  {
+    "name": null,
+    "base_url": null,
+    "auth_token": null,
+    "variables": [],
+    "headers": {},
+    "id": "120305a3-181d-4e37-9d7a-f0feade79c77"
+  }
+]
