@@ -1,5 +1,25 @@
 [
   {
+    "id": "80962031-3231-4f87-b86c-9665d6573a01",
+    "name": "Account Login and get token",
+    "relative_path": "/login/gen-token",
+    "method": "POST",
+    "headers": {
+      "channel": "ASE"
+    },
+    "params": {},
+    "json_body": {
+      "password": "{{LOGIN_PASSWORD}}",
+      "userName": "{{LOGIN_USERNAME}}"
+    },
+    "order": 0,
+    "extract": [
+      {
+        "Authorization": "$.result.token"
+      }
+    ]
+  },
+  {
     "id": "653b1a38-ef08-4e14-a3cd-95d06f4442a5",
     "name": "T&C Link Barclays",
     "relative_path": "/tc/link",
@@ -12,7 +32,9 @@
       "channel": "barclays"
     },
     "order": 0,
-    "extract": []
+    "extract": [
+      123
+    ]
   },
   {
     "id": "09b8799d-bfa5-4a54-8d86-e3fd34981639",
@@ -27,7 +49,9 @@
       "channel": "{{agent}}"
     },
     "order": 0,
-    "extract": []
+    "extract": [
+      123
+    ]
   },
   {
     "id": "16ffcd08-e186-43b9-bc1f-68f3c61f6f24",

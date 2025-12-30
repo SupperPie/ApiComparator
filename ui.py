@@ -4,6 +4,7 @@ import json
 import uuid
 import difflib
 import html
+import time
 from logic import save_json_file, execute_comparison_run, fetch_api_data, parse_openapi_spec, parse_apifox_project
 
 # --- CSS & Styling ---
@@ -376,80 +377,95 @@ def render_dashboard():
 def render_configuration(api_template_file, env_config_file):
     st.title("⚙️ Configuration")
     
-    tab1, tab2 = st.tabs(["API Templates", "Environments"])
+    tab1, tab2 = st.tabs(["API Collections", "Environments"])
     
     with tab1:
-        # --- Header Actions ---
-        col_header, col_actions = st.columns([1, 1])
+
+        msg_placeholder = st.empty()
+        
+        col_header, col_tools = st.columns([2, 3])
         with col_header:
-            st.subheader("Manage API Templates")
+            st.subheader("Manage API Collections")
             st.caption(f"Total APIs: {len(st.session_state.api_templates)}")
+
+        with col_tools:
+            # Import | Clear | Delete
+            b1, b2, b3 = st.columns([1, 1, 1.2])
             
-        with col_actions:
-            c_import, c_clear = st.columns([1, 1])
-            with c_import:
-                with st.popover("📥 Import APIs", use_container_width=True):
-                    if 'uploader_key' not in st.session_state:
-                        st.session_state.uploader_key = str(uuid.uuid4())
-                    
-                    uploaded_file = st.file_uploader("Upload JSON", type=["json"], label_visibility="collapsed", key=st.session_state.uploader_key)
-                    
-                    if uploaded_file is not None:
-                        try:
-                            imported_data = json.load(uploaded_file)
-                            new_apis = []
-                            # 1. Check for Apifox Project (New Format)
+            # Import
+            with b1:
+                 with st.popover("📥 Import", use_container_width=True):
+                     # ... Import Logic Wrapper ...
+                     if 'uploader_key' not in st.session_state: st.session_state.uploader_key = str(uuid.uuid4())
+                     u_file = st.file_uploader("JSON", type=["json"], key=st.session_state.uploader_key)
+                     if u_file:
+                         try:
+                            imported_data = json.load(u_file)
+                            # ... Calls to parse ...
                             if isinstance(imported_data, dict) and 'apifoxProject' in imported_data:
-                                st.info("Detected Apifox Project format. Extracting cases...")
                                 new_apis = parse_apifox_project(imported_data)
-                            # 2. Check for OpenAPI / Swagger
                             elif isinstance(imported_data, dict) and ('openapi' in imported_data or 'swagger' in imported_data):
-                                st.info("Detected OpenAPI/Swagger format. Parsing...")
                                 new_apis = parse_openapi_spec(imported_data)
                             else:
-                                # 2. Handle Standard List
-                                raw_list = []
-                                if isinstance(imported_data, dict):
-                                    for key in ["apis", "data", "items", "list"]:
-                                        if key in imported_data and isinstance(imported_data[key], list):
-                                            raw_list = imported_data[key]; break
-                                    if not raw_list and 'relative_path' in imported_data: raw_list = [imported_data]
-                                elif isinstance(imported_data, list):
-                                    raw_list = imported_data
-                                if raw_list: new_apis = raw_list
-                                else: st.error("Invalid JSON format.")
-
-                            # 3. Merge
+                                 # List logic
+                                 raw_list = []
+                                 if isinstance(imported_data, dict):
+                                     for k in ["apis", "data", "items", "list"]:
+                                         if k in imported_data and isinstance(imported_data[k], list): raw_list = imported_data[k]; break
+                                     if not raw_list and 'relative_path' in imported_data: raw_list = [imported_data]
+                                 elif isinstance(imported_data, list): raw_list = imported_data
+                                 new_apis = raw_list if raw_list else []
+                            
                             if new_apis:
-                                current_ids = {t['id'] for t in st.session_state.api_templates if 'id' in t}
-                                count = 0
-                                for item in reversed(new_apis):
-                                    if 'name' in item and 'relative_path' in item:
-                                        if 'id' not in item or item['id'] in current_ids: item['id'] = str(uuid.uuid4())
-                                        for f in ['headers', 'params', 'json_body']:
-                                            if f not in item or item[f] is None: item[f] = {}
-                                        st.session_state.api_templates.insert(0, item) # Insert at top
-                                        count += 1
-                                
-                                save_json_file(api_template_file, st.session_state.api_templates)
-                                st.success(f"Imported {count} APIs!")
-                                st.session_state.uploader_key = str(uuid.uuid4()) # Reset
-                                st.rerun()
-                                
-                        except json.JSONDecodeError as e: st.error(f"Invalid JSON: {e}")
-                        except Exception as e: st.error("Import failed"); st.exception(e)
+                                 # Merge logic
+                                 c_ids = {t['id'] for t in st.session_state.api_templates if 'id' in t}
+                                 cnt = 0
+                                 for item in reversed(new_apis):
+                                     if 'name' in item:
+                                         if 'id' not in item or item['id'] in c_ids: item['id'] = str(uuid.uuid4())
+                                         for f in ['headers','params','json_body']: 
+                                             if f not in item or item[f] is None: item[f] = {}
+                                         st.session_state.api_templates.insert(0, item)
+                                         cnt += 1
+                                 save_json_file(api_template_file, st.session_state.api_templates)
+                                 msg_placeholder.success(f"Imported {cnt} APIs!")
+                                 st.session_state.uploader_key = str(uuid.uuid4())
+                                 st.rerun()
+                         except Exception as e: st.error(f"Import Error: {e}")
 
-            with c_clear:
-                with st.popover("🗑️ Clear All", use_container_width=True):
-                    st.write("Are you sure you want to delete all API templates?")
-                    if st.button("Confirm Delete", type="primary", use_container_width=True):
-                        st.session_state.api_templates = []
-                        save_json_file(api_template_file, [])
-                        st.rerun()
+            # Clear
+            with b2:
+                 with st.popover("🗑️ Clear", use_container_width=True):
+                     st.write("Delete ALL?")
+                     if st.button("Confirm", type="primary", use_container_width=True):
+                         st.session_state.api_templates = []
+                         save_json_file(api_template_file, [])
+                         st.rerun()
+            
+            # Delete Selected
+            with b3:
+                delete_selected_clicked = st.button("Delete Selected", type="primary", use_container_width=True)
+            
+        # Success Message Area (for Auto-Save)
+        if 'autosave_success' in st.session_state and st.session_state.autosave_success:
+             # Use a timestamp to control visibility (3 seconds)
+             if 'save_timestamp' not in st.session_state:
+                 st.session_state.save_timestamp = time.time()
+             
+             if time.time() - st.session_state.save_timestamp < 3:
+                 msg_placeholder.success("✅ Changes Saved")
+             else:
+                 st.session_state.autosave_success = False
+                 msg_placeholder.empty()
+        
+        if 'autosave_error' in st.session_state and st.session_state.autosave_error:
+             msg_placeholder.error(f"❌ Save Failed: {st.session_state.autosave_error}")
 
         # --- Data Table (No Pagination, Native Selection) ---
+        # st.write("DEBUG: Trace - data_editor block reached") # DEBUG
         
         api_df = pd.DataFrame(st.session_state.api_templates)
+        # st.write(f"DEBUG: api_templates count: {len(st.session_state.api_templates)}") # DEBUG
         
         # Ensure Columns
         cols = ["name", "relative_path", "method", "headers", "params", "json_body", "id"]
@@ -476,13 +492,8 @@ def render_configuration(api_template_file, env_config_file):
         # We use a unique key based on length to force refresh on add/delete
         editor_key = f"main_api_editor_{len(api_df)}" 
         
-        # Action Bar (Save & Delete)
-        act_col1, act_col2 = st.columns([1, 4])
-        with act_col1:
-            save_clicked = st.button("💾 Save", type="primary", use_container_width=True)
-            
-        with act_col2:
-            delete_clicked = st.button("Delete", type="primary", use_container_width=False)
+        # Editor Key Logic (force refresh on struct change)
+        editor_key = f"main_api_editor_{len(api_df)}"
 
         # Show Editor
         # Data Editor (Force Reload)
@@ -492,23 +503,56 @@ def render_configuration(api_template_file, env_config_file):
             column_config={
                 "Select": st.column_config.CheckboxColumn(required=True),
                 "id": st.column_config.TextColumn(disabled=True, width="small"),
-                "order": st.column_config.NumberColumn("Order", help="Execution Order (1, 2...)", default=0, width="small"),
+                "order": st.column_config.NumberColumn(
+                    "Order", 
+                    help="Execution Sequence (1, 2, 3...). APIs are run in this order. Important for variable extraction & chaining.", 
+                    default=0, 
+                    width="small"
+                ),
                 "name": st.column_config.TextColumn("Name", width="medium"),
                 "relative_path": st.column_config.TextColumn("Path", width="medium"),
                 "method": st.column_config.SelectboxColumn("Method", options=["GET", "POST", "PUT", "DELETE", "PATCH"], width="small", required=True),
                 "headers": st.column_config.TextColumn("Headers (JSON)", width="medium"),
-                "params": st.column_config.TextColumn("Params (JSON)", width="medium"),
                 "json_body": st.column_config.TextColumn("Body (JSON)", width="medium"),
-                "extract": st.column_config.TextColumn("Extract (JSON)", width="medium", help='e.g. [{"source": "token", "target_var": "auth_token"}]'),
+                "extract": st.column_config.TextColumn(
+                    "Post Action", 
+                    width="medium", 
+                    help='Define variables to extract from response.\n\nFormat: JSON List of Key-Value pairs.\n\nExample:\n[{"token": "$.result.token"}, {"user_id": "$.result.id"}]'
+                ),
             },
-            column_order=["Select", "order", "name", "relative_path", "method", "headers", "params", "json_body", "extract"],
+            column_order=["Select", "order", "name", "relative_path", "method", "headers", "json_body", "extract"],
             use_container_width=True,
             hide_index=True,
             num_rows="dynamic"
         )
         
         # LOGIC: SAVE
-        if save_clicked:
+        # LOGIC: AUTO-SAVE
+        # Detect changes (ignoring Select column which is for deletion state)
+        # We need to ensure we compare comparable types. 
+        # api_df comes from st.session_state (list of dicts -> df).
+        # edited_api_df comes from editor.
+        
+        # Helper to process DF for comparison
+        # Helper to process DF for comparison
+        def clean_for_diff(df):
+            d = df.drop(columns=["Select"], errors="ignore").copy()
+            # Normalize to string recursively
+            for col in d.columns:
+                 # Ensure None becomes "" and trim whitespace
+                 d[col] = d[col].astype(str).replace("None", "").replace("nan", "").str.strip()
+            return d.fillna("")
+
+        has_changes = False
+        if not clean_for_diff(api_df).equals(clean_for_diff(edited_api_df)):
+             has_changes = True
+        
+        # st.write(f"DEBUG: has_changes: {has_changes}")
+        # if has_changes:
+        #     st.write("DEBUG: API DF (Top 1):", clean_for_diff(api_df).head(1).to_dict())
+        #     st.write("DEBUG: Edited DF (Top 1):", clean_for_diff(edited_api_df).head(1).to_dict())
+
+        if has_changes:
             try:
                 # Convert back to list of dicts
                 cleaned_data = json.loads(edited_api_df.to_json(orient="records"))
@@ -538,8 +582,8 @@ def render_configuration(api_template_file, env_config_file):
                                      row[field] = []
                             except:
                                 row[field] = {} if field != 'extract' else []
-                        if field == 'headers' and row.get('headers') is None: row['headers'] = {}
-                        if field == 'extract' and row.get('extract') is None: row['extract'] = []
+                        if field == 'headers' and (not isinstance(row.get('headers'), dict)): row['headers'] = {}
+                        if field == 'extract' and (not isinstance(row.get('extract'), list)): row['extract'] = []
 
                     filtered_data.append(row)
 
@@ -548,31 +592,47 @@ def render_configuration(api_template_file, env_config_file):
 
                 st.session_state.api_templates = filtered_data
                 save_json_file(api_template_file, st.session_state.api_templates)
-                st.success("✅ Changes Saved!")
+                st.session_state.autosave_success = True
+                st.session_state.save_timestamp = time.time() # Reset timer
+                st.session_state.autosave_error = None
                 st.rerun()
             except Exception as e:
+                st.session_state.autosave_error = str(e)
                 st.error(f"Save failed: {e}")
 
         # LOGIC: DELETE WITH CHECKBOX
-        if delete_clicked:
-            # Filter rows where Select is True
-            to_delete = edited_api_df[edited_api_df["Select"] == True]
+        if delete_selected_clicked:
+            # We need to access the editor state. 
+            # Since auto-save updates st.session_state.api_templates, we rely on api_df (input) having valid Selects?
+            # NO. api_df is recreated on every run from st.session_state.api_templates.
+            # Edited info is in edited_api_df.
+            # We filter edited_api_df.
             
+            # Note: edited_api_df comes from st.data_editor which ran AFTER the button click in previous execution order,
+            # BUT in Streamlit flow: Button Click -> Rerun -> Button is True -> Data Editor runs.
+            # So we have access to edited_api_df from THIS run.
+            # Wait, button is at top. script runs Top -> Bottom.
+            # line `delete_selected_clicked = ...` runs. True.
+            # line `edited_api_df = st.data_editor...` runs.
+            # Then we check `if delete_selected_clicked:`.
+            # So `edited_api_df` IS available.
+            
+            to_delete = edited_api_df[edited_api_df["Select"] == True]
             if to_delete.empty:
-                st.warning("Please select rows to delete using the 'Select' checkbox column.")
+                msg_placeholder.warning("Please select rows to delete.")
             else:
                 ids_to_delete = set(to_delete["id"].dropna().tolist())
-                
                 if ids_to_delete:
-                    # Filter out deleted IDs
                     new_list = [t for t in st.session_state.api_templates if t.get('id') not in ids_to_delete]
                     st.session_state.api_templates = new_list
                     save_json_file(api_template_file, st.session_state.api_templates)
-                    st.success(f"Deleted {len(ids_to_delete)} items!")
+                    msg_placeholder.success(f"Deleted {len(ids_to_delete)} items.")
                     st.rerun()
+            
+
                     
     with tab2:
-        st.subheader("Manage Environments")
+        #st.subheader("Manage Environments")
         
         # 1. Master List (Environments)
         # Load and ensure structure
@@ -590,116 +650,180 @@ def render_configuration(api_template_file, env_config_file):
             if "auth_token" not in e: e["auth_token"] = ""
             if "headers" not in e: e["headers"] = {}
 
+            # --- Migration: Move Auth/Headers to Variables ---
+            # We check if they exist independently and are NOT in variables yet.
+            existing_keys = set()
+            for v in e["variables"]:
+                if isinstance(v, dict) and 'key' in v:
+                    existing_keys.add(v['key'])
+            
+            # Migrate Auth Token
+            if e.get("auth_token") and "auth_token" not in existing_keys:
+                e["variables"].append({
+                    "key": "auth_token", 
+                    "value": e["auth_token"], 
+                    "description": "Migrated from Auth Token field"
+                })
+                e["auth_token"] = "" # Clear to avoid confusion
+                
+            # Migrate Headers
+            if e.get("headers") and isinstance(e["headers"], dict) and e["headers"]:
+                if "headers" not in existing_keys:
+                    try:
+                        h_val = json.dumps(e["headers"])
+                        e["variables"].append({
+                            "key": "headers", 
+                            "value": h_val, 
+                            "description": "Migrated from Headers field"
+                        })
+                    except: pass
+                e["headers"] = {} # Clear
+
         env_df = pd.DataFrame(env_list)
         if env_df.empty:
              env_df = pd.DataFrame(columns=["name", "base_url", "auth_token", "variables", "headers"])
         
-        # We use data_editor for adding/removing environments, but hiding complex columns
+        # We use st.radio for single selection as requested, replacing the complex data_editor
         col_list, col_detail = st.columns([2, 3])
         
         with col_list:
-            st.markdown("#### 1. Environment List")
-            edited_env_df = st.data_editor(
-                env_df,
-                num_rows="dynamic",
-                column_config={
-                    "id": st.column_config.TextColumn(disabled=True, width="small"),
-                    "name": "Name",
-                    "base_url": "Base URL",
-                },
-                column_order=["name", "base_url"], # Hide others
-                use_container_width=True,
-                key="env_master_editor"
-            )
+            st.markdown("#### Environment List")
             
-            # Save List Changes (Add/Remove)
-            if st.button("💾 Save Environment List", key="save_env_list"):
-                 # Re-merge logic for list changes
-                 updated_envs = json.loads(edited_env_df.to_json(orient="records"))
-                 
-                 # Prepare final list to save
-                 for row in updated_envs:
-                     if "id" not in row or not row["id"]:
-                         row["id"] = str(uuid.uuid4())
-                     # Ensure nested list structure if new (pandas might drop empty cols)
-                     if "variables" not in row or row["variables"] is None:
-                         row["variables"] = []
-                     if "headers" not in row or row["headers"] is None:
-                         row["headers"] = {}
-                 
-                 st.session_state.environments = updated_envs
-                 save_json_file(env_config_file, st.session_state.environments)
-                 st.success("Environment List Saved!")
-                 st.rerun()
+            # Prepare options for radio button
+            # Map ID to Display Name
+            if not env_list:
+                st.info("No environments. Create one below.")
+                selected_env_id = None
+            else:
+                # Use a dict for mapping if needed, or just list of IDs and format_func
+                # We need a stable identifier.
+                env_map = {e['id']: e for e in env_list}
+                
+                # Verify current selection is valid
+                if 'selected_env_id' not in st.session_state:
+                    st.session_state.selected_env_id = env_list[0]['id']
+                elif st.session_state.selected_env_id not in env_map:
+                    if env_list: st.session_state.selected_env_id = env_list[0]['id']
+                    else: st.session_state.selected_env_id = None
+
+                selected_env_id = st.radio(
+                    "Select Environment",
+                    options=[e['id'] for e in env_list],
+                    format_func=lambda x: env_map[x].get('name') or "Unnamed",
+                    key="selected_env_id",
+                    label_visibility="collapsed",
+                    # Add on_change to force update of other elements if needed, 
+                    # though key binding usually suffices for immediate state update.
+                )
+                
+                if selected_env_id != st.session_state.get('selected_env_id_prev'):
+                    st.session_state.selected_env_id_prev = selected_env_id
+                    # Force rerun to ensure Detail View updates immediately? 
+                    # Usually streamlit handles this, but let's be safe if user reports lag.
+                    # st.rerun() 
+                    pass
+            
+            # Callbacks for Add/Delete to handle State safely
+            def add_env():
+                new_id = str(uuid.uuid4())
+                new_env = {
+                    "id": new_id,
+                    "name": "New Environment",
+                    "base_url": "",
+                    "auth_token": "",
+                    "variables": [],
+                    "headers": {}
+                }
+                st.session_state.environments.append(new_env)
+                st.session_state.selected_env_id = new_id # Select new
+                save_json_file(env_config_file, st.session_state.environments)
+
+            def delete_env():
+                current = st.session_state.selected_env_id
+                if current:
+                     st.session_state.environments = [e for e in st.session_state.environments if e['id'] != current]
+                     # If we deleted the selected one, reset selection to first or None
+                     if st.session_state.environments:
+                         st.session_state.selected_env_id = st.session_state.environments[0]['id']
+                     else:
+                         st.session_state.selected_env_id = None
+                     
+                     save_json_file(env_config_file, st.session_state.environments)
+
+            # Add / Delete Actions
+            c_add, c_del = st.columns(2)
+            c_add.button("➕ New", use_container_width=True, on_click=add_env)
+            with c_del.popover("🗑️ Delete", use_container_width=True):
+                st.markdown("Are you sure you want to delete this environment?")
+                st.button("Confirm Delete", type="primary", on_click=delete_env)
 
         # 2. Detail View (Select to Edit)
         with col_detail:
-            st.markdown("#### 2. Configure Variables")
+            st.markdown("#### Configure Details")
             
-            # Selector
-            # Ensure name is not None or Empty
-            env_options = {e['id']: (e.get('name') or 'Unnamed') for e in st.session_state.environments}
-            if not env_options:
-                st.info("Create an environment first.")
+            target_env = next((e for e in st.session_state.environments if e['id'] == selected_env_id), None)
+            
+            if not target_env:
+                st.info("Select or create an environment to configure.")
             else:
-                current_env_id = st.selectbox("Select Environment to Edit:", list(env_options.keys()), format_func=lambda x: env_options[x])
-                
-                # Find the env object reference in session_state (mutable)
-                target_env = next((e for e in st.session_state.environments if e['id'] == current_env_id), None)
-                
-                if target_env:
-                    st.caption(f"Editing: **{target_env.get('name')}**")
-                    
-                    # Auth Token & Headers (Global for Env)
-                    with st.expander("🔑 Auth & Headers", expanded=False):
-                        target_env['auth_token'] = st.text_input("Auth Token (Optional)", value=target_env.get('auth_token', ''))
-                        
-                        # Headers (JSON)
-                        headers_str = json.dumps(target_env.get('headers', {}), indent=2)
-                        new_headers_str = st.text_area("Extra Headers (JSON)", value=headers_str, height=100)
-                        try:
-                            target_env['headers'] = json.loads(new_headers_str)
-                        except:
-                            st.warning("Invalid JSON for headers")
+                # Basic Details Editor
+                with st.container():
+                     # Edit Name and Base URL here since we removed them from the validation list editor
+                     c_name, c_url = st.columns([1, 2])
+                     new_name = c_name.text_input("Name", value=target_env.get('name', ''))
+                     new_url = c_url.text_input("Base URL", value=target_env.get('base_url', ''))
+                     
+                     # Auto-save basic details on change (simpler than explicit save button for these fields)
+                     if new_name != target_env.get('name') or new_url != target_env.get('base_url'):
+                         target_env['name'] = new_name
+                         target_env['base_url'] = new_url
+                         save_json_file(env_config_file, st.session_state.environments)
+                         # Rerun to update the radio button list label immediately
+                         st.rerun()
 
-                    # Variables Editor (List)
-                    var_list = target_env.get('variables', [])
-                    # Ensure it's a list (fix potential data issues)
-                    if not isinstance(var_list, list): var_list = []
+                st.caption(f"Variables for: **{target_env.get('name')}**")
                     
-                    var_df = pd.DataFrame(var_list)
-                    if var_df.empty:
-                        var_df = pd.DataFrame(columns=["key", "value", "description"])
+                st.info("💡 Tip: Add 'auth_token' or 'headers' (JSON) as variables to configure authentication and default headers.")
+
+                # Variables Editor (List)
+                var_list = target_env.get('variables', [])
+                # Ensure it's a list (fix potential data issues)
+                if not isinstance(var_list, list): var_list = []
+                
+                var_df = pd.DataFrame(var_list)
+                if var_df.empty:
+                    var_df = pd.DataFrame(columns=["key", "value", "description"])
+                
+                edited_vars = st.data_editor(
+                    var_df,
+                    num_rows="dynamic",
+                    column_config={
+                        "key": st.column_config.TextColumn("Variable", required=True), # Renamed to standard "Variable"
+                        "value": st.column_config.TextColumn("Value", width="medium"),
+                        "description": st.column_config.TextColumn("Description", width="large"),
+                    },
+                    column_order=["key", "value", "description"],
+                    use_container_width=True,
+                    key=f"var_editor_{target_env['id']}"
+                )
                     
-                    edited_vars = st.data_editor(
-                        var_df,
-                        num_rows="dynamic",
-                        column_config={
-                            "key": st.column_config.TextColumn("Variable", required=True), # Renamed to standard "Variable"
-                            "value": st.column_config.TextColumn("Value", width="medium"),
-                            "description": st.column_config.TextColumn("Description", width="large"),
-                        },
-                        column_order=["key", "value", "description"],
-                        use_container_width=True,
-                        key=f"var_editor_{current_env_id}"
-                    )
+                if st.button("💾 Save Configuration", key="save_env_vars"):
+                    # Update the target_env variables
+                    new_vars_list = json.loads(edited_vars.to_json(orient="records"))
+                    # Filter empty keys
+                    new_vars_list = [v for v in new_vars_list if v.get('key')]
                     
-                    if st.button("💾 Save Configuration", key="save_env_vars"):
-                        # Update the target_env variables
-                        new_vars_list = json.loads(edited_vars.to_json(orient="records"))
-                        # Filter empty keys
-                        new_vars_list = [v for v in new_vars_list if v.get('key')]
-                        
-                        target_env['variables'] = new_vars_list
-                        
-                        # Save entire environments file
-                        save_json_file(env_config_file, st.session_state.environments)
-                        st.success(f"Saved configuration for {target_env.get('name')}")
-def render_comparator(history_file):
+                    target_env['variables'] = new_vars_list
+                    
+                    # Save entire environments file
+                    save_json_file(env_config_file, st.session_state.environments)
+                    st.success(f"Saved configuration for {target_env.get('name')}")
+def render_comparator(history_file, env_config_file):
     st.title("🚀 Comparator")
     
     # --- Execution Controls ---
     with st.expander("⚙️ Run Configuration", expanded=not st.session_state.current_run_results):
+
         st.subheader("Select Environments")
         # Horizontal Checkboxes
         cols = st.columns(4)
@@ -714,52 +838,64 @@ def render_comparator(history_file):
             
         st.subheader("Select APIs")
         
-        # Move Start Button to Top Right (Header Area)
-        # We really want it aligned with "Select APIs" header or similar.
-        # But we are in an expander. Let's put it right above the table.
+        # Header Layout: Info | Progress | Button
+        c_info, c_prog, c_btn = st.columns([2, 4, 1.5])
         
-        col_header, col_btn = st.columns([6, 1])
-        with col_header:
+        with c_info:
             st.caption(f"Total APIs: {len(st.session_state.api_templates)}")
-        with col_btn:
+        
+        with c_prog:
+            prog_place = st.empty()
+            status_place = st.empty()
+            
+        with c_btn:
             start_clicked = st.button("▶ Compare", type="primary", use_container_width=True)
 
         if not st.session_state.api_templates:
-            api_display_df = pd.DataFrame(columns=["Selected", "Name", "Path", "ID", "Params", "Body"])
+            api_display_df = pd.DataFrame(columns=["Select", "order", "name", "relative_path", "method", "headers", "json_body", "extract", "id"])
         else:
             api_display_df = pd.DataFrame([
                 {
-                    "Selected": False,
-                    "Name": t['name'], 
-                    "Path": t['relative_path'], 
-                    "ID": t['id'],
-                    "Params": to_json_str(t.get('params')),
-                    "Body": to_json_str(t.get('json_body'))
+                    "Select": False,
+                    "order": t.get('order', 0),
+                    "name": t['name'], 
+                    "relative_path": t['relative_path'], 
+                    "method": t.get('method', 'GET'),
+                    "headers": to_json_str(t.get('headers')),
+                    "json_body": to_json_str(t.get('json_body')),
+                    "extract": to_json_str(t.get('extract')),
+                    "id": t['id']
                 }
                 for t in st.session_state.api_templates
             ])
         
+        # Placeholder for validation/error messages at the top of the list
+        comp_msg_placeholder = st.empty()
+
         edited_selection = st.data_editor(
             api_display_df,
             column_config={
-                "Selected": st.column_config.CheckboxColumn(required=True, width="small"),
-                "ID": st.column_config.TextColumn("ID", width="small", disabled=True), 
-                "Name": st.column_config.TextColumn(width="medium", disabled=True),
-                "Path": st.column_config.TextColumn(width="medium", disabled=True),
-                "Params": st.column_config.TextColumn(width="medium", help="JSON Params", disabled=True),
-                "Body": st.column_config.TextColumn(width="medium", help="JSON Body", disabled=True),
+                "Select": st.column_config.CheckboxColumn(required=True, width="small"),
+                "id": st.column_config.TextColumn(disabled=True, width="small"),
+                "order": st.column_config.NumberColumn("Order", width="small", disabled=True),
+                "name": st.column_config.TextColumn("Name", width="medium", disabled=True),
+                "relative_path": st.column_config.TextColumn("Path", width="medium", disabled=True),
+                "method": st.column_config.TextColumn("Method", width="small", disabled=True),
+                "headers": st.column_config.TextColumn("Headers (JSON)", width="medium", disabled=True),
+                "json_body": st.column_config.TextColumn("Body (JSON)", width="medium", disabled=True),
+                "extract": st.column_config.TextColumn("Post Action", width="medium", disabled=True),
             },
-            column_order=["Selected", "Name", "Path", "Params", "Body", "ID"], 
+            column_order=["Select", "order", "name", "relative_path", "method", "headers", "json_body", "extract"], 
             hide_index=True,
             use_container_width=True,
-            key="comparator_api_selector_v2" # Force reset
+            key="comparator_api_selector_v3" # Force reset
         )
         
         # Robust Selection: Use index to find selected rows
         # st.data_editor returns a dataframe with the same index as input
-        # We find indices where 'Selected' is True
+        # We find indices where 'Select' is True
         try:
-            selected_indices = edited_selection.index[edited_selection["Selected"]].tolist()
+            selected_indices = edited_selection.index[edited_selection["Select"]].tolist()
             # Map back to original IDs using these indices
             # Note: api_display_df uses default range index 0..N which matches session_state.api_templates
             selected_api_ids = [st.session_state.api_templates[i]['id'] for i in selected_indices if i < len(st.session_state.api_templates)]
@@ -769,17 +905,14 @@ def render_comparator(history_file):
         
         if start_clicked:
             if len(selected_env_ids) < 2:
-                st.error("Please select at least 2 environments.")
+                comp_msg_placeholder.error("Please select at least 2 environments.")
             elif not selected_api_ids:
-                st.error("Please select at least 1 API.")
+                comp_msg_placeholder.error("Please select at least 1 API.")
             else:
                 # Progress Callback
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
                 def update_progress(current, total, msg):
-                    progress_bar.progress(current / total)
-                    status_text.text(msg)
+                    prog_place.progress(current / total)
+                    status_place.caption(msg)
                 
                 # Execute Logic
                 results = execute_comparison_run(
@@ -794,6 +927,10 @@ def render_comparator(history_file):
                 st.session_state.current_run_results = results
                 st.session_state.comparison_history.insert(0, results)
                 save_json_file(history_file, st.session_state.comparison_history)
+                
+                # CRITICAL: Save Environments because extraction logic modifies them!
+                save_json_file(env_config_file, st.session_state.environments)
+                
                 st.rerun()
 
     # --- Analysis / Results View ---
@@ -876,48 +1013,46 @@ def render_comparator(history_file):
                 
                 # Removed Detailed Diff JSON display as per user request
 
-    if st.button("Back to Dashboard"):
-        st.session_state.page = "dashboard"
-        st.rerun()
 
 def render_debugger():
     st.title("🛠️ Single API Debugger")
-    st.markdown("Interactively test an API against a specific environment.")
+    # st.markdown("Interactively test an API against a specific environment.") # Reduced clutter
     
-    col1, col2 = st.columns(2)
+    # --- Layout: Main Page (No Sidebar) ---
     
-    with col1:
-        # Select Environment
-        env_opts = {e['id']: e['name'] for e in st.session_state.environments}
+    # 1. Selection Row
+    col_env, col_api, col_reset = st.columns([3, 3, 1])
+    
+    with col_env:
+        env_opts = {e['id']: (e.get('name') or "Unnamed") for e in st.session_state.environments}
         selected_env_id = st.selectbox(
-            "1. Select Environment",
+            "Environment",
             options=list(env_opts.keys()),
             format_func=lambda x: env_opts[x],
             key="debug_env_select"
         )
         selected_env = next((e for e in st.session_state.environments if e['id'] == selected_env_id), None)
 
-    with col2:
-        # Select API Template to pre-fill
-        api_opts = {t['id']: t['name'] for t in st.session_state.api_templates}
-        # Add a "Custom" option? For now just templates.
+    with col_api:
+        api_opts = {t['id']: (t.get('name') or "Unnamed API") for t in st.session_state.api_templates}
         selected_api_id = st.selectbox(
-            "2. Select API Template (Pre-fill)",
+            "Load Collection Item",
             options=list(api_opts.keys()),
             format_func=lambda x: api_opts[x],
             key="debug_api_select"
         )
         selected_api = next((t for t in st.session_state.api_templates if t['id'] == selected_api_id), None)
 
-    st.markdown("---")
-    st.subheader("Request Details")
-    
-    # Initialize session state for debug inputs if not present or if API changed
-    # Also allow forcing a reset
+    with col_reset:
+        st.write("") # Spacer
+        st.write("")
+        if st.button("🔄 Reset", use_container_width=True):
+            if 'debug_api_id' in st.session_state: del st.session_state['debug_api_id']
+            st.rerun()
+
+    # Initialize/Update State from Template
     if 'debug_api_id' not in st.session_state or st.session_state.debug_api_id != selected_api_id:
         st.session_state.debug_api_id = selected_api_id
-        
-        # Only update if we have a valid selected_api
         if selected_api:
             st.session_state.debug_method = selected_api.get('method', 'GET')
             st.session_state.debug_path = selected_api.get('relative_path', '')
@@ -929,65 +1064,70 @@ def render_debugger():
             if isinstance(env_headers, str):
                 try: env_headers = json.loads(env_headers)
                 except: env_headers = {}
-            if not isinstance(env_headers, dict):
-                env_headers = {}
-                
+            
             api_headers = selected_api.get('headers', {})
             if isinstance(api_headers, str):
                 try: api_headers = json.loads(api_headers)
                 except: api_headers = {}
-            if not isinstance(api_headers, dict):
-                api_headers = {}
-
+                
             combined_headers = {**env_headers, **api_headers}
             st.session_state.debug_headers = json.dumps(combined_headers, indent=2, ensure_ascii=False)
         else:
-             # Default if no API selected
              st.session_state.debug_method = "GET"
              st.session_state.debug_path = ""
              st.session_state.debug_headers = "{}"
              st.session_state.debug_params = "{}"
              st.session_state.debug_body = "{}"
 
-    if st.button("🔄 Reset to Defaults"):
-        del st.session_state['debug_api_id']
-        st.rerun()
+    st.markdown("---")
+    
+    # 2. Request Details
+    r_col1, r_col2 = st.columns([1, 4])
+    with r_col1:
+         method = st.selectbox("Method", ["GET", "POST", "PUT", "DELETE", "PATCH"], 
+                               index=["GET", "POST", "PUT", "DELETE", "PATCH"].index(st.session_state.debug_method) if st.session_state.debug_method in ["GET", "POST", "PUT", "DELETE", "PATCH"] else 0,
+                               label_visibility="collapsed")
+    with r_col2:
+         path = st.text_input("Path", value=st.session_state.debug_path, label_visibility="collapsed", placeholder="/api/endpoint")
 
-    # Editable Fields
-    c1, c2 = st.columns([1, 3])
-    with c1:
-        method = st.selectbox("Method", ["GET", "POST", "PUT", "DELETE"], index=["GET", "POST", "PUT", "DELETE"].index(st.session_state.debug_method))
-    with c2:
-        path = st.text_input("Relative Path", value=st.session_state.debug_path)
+    # Tabs for Details
+    tab_body, tab_headers, tab_params, tab_extract = st.tabs(["Body", "Headers", "Params", "Post-Process"])
+    
+    with tab_body:
+        body_str = st.text_area("Request Body (JSON)", value=st.session_state.debug_body, height=150)
+    with tab_headers:
+        headers_str = st.text_area("Request Headers (JSON)", value=st.session_state.debug_headers, height=150)
+    with tab_params:
+        params_str = st.text_area("Query Params (JSON)", value=st.session_state.debug_params, height=150)
+    
+    # --- New Feature: Post-Process Extraction ---
+    with tab_extract:
+        st.info("Extract values from response to update environment variables.")
+        ex_col1, ex_col2 = st.columns(2)
+        with ex_col1:
+            extract_var_name = st.text_input("Target Variable Name", placeholder="e.g. auth_token", help="Variable to update/create in the selected environment")
+        with ex_col2:
+            extract_json_path = st.text_input("JSON Path", placeholder="e.g. $.result.token", help="Path to value in response JSON")
+            
+    st.markdown("<br>", unsafe_allow_html=True)
+    send_clicked = st.button("🚀 Send Request", type="primary", use_container_width=True)
+
+    # --- Response Area ---
+    if send_clicked:
+        st.markdown("---")
+        st.subheader("Response")
         
-    c3, c4, c5 = st.columns(3)
-    with c3:
-        headers_str = st.text_area("Headers (JSON)", value=st.session_state.debug_headers, height=200)
-    with c4:
-        params_str = st.text_area("Params (JSON)", value=st.session_state.debug_params, height=200)
-    with c5:
-        body_str = st.text_area("Body (JSON)", value=st.session_state.debug_body, height=200)
-
-    if st.button("🚀 Send Request", type="primary"):
         # Construct temporary template
         temp_template = {
             "id": "debug_temp",
             "name": "Debug Request",
             "relative_path": path,
             "method": method,
-            "headers": headers_str, # Will be parsed by fetch_api_data logic if we update it, OR we parse here.
-            # logic.py fetch_api_data expects 'headers' in env or constructed. 
-            # Actually fetch_api_data merges env['headers']. 
-            # We should pass these headers as if they are the FINAL headers.
-            # But fetch_api_data logic currently merges env headers + auth token.
-            # To support custom headers from Playground, we might need to pass them explicitly.
+            "headers": headers_str, 
             "params": params_str, 
             "json_body": body_str
         }
         
-        # We need to handle headers specially because fetch_api_data merges env headers.
-        # If we want to OVERRIDE everything with what's in the text area, we should probably pass it differently.
-        # Let's parse it here.
         try:
             custom_headers = json.loads(headers_str) if headers_str.strip() else {}
         except:
@@ -995,25 +1135,63 @@ def render_debugger():
             st.warning("Invalid JSON in Headers. Sending empty headers.")
 
         with st.spinner("Sending request..."):
-            # We pass custom_headers to fetch_api_data. 
-            # We need to update fetch_api_data signature or pass it via template?
-            # Let's pass it via template['headers'] and update logic.py to respect it.
             temp_template['headers'] = custom_headers
-            result = fetch_api_data(selected_env, temp_template, None)
+            # Pass empty dict for context if None, logic.py handles it now regardless
+            result = fetch_api_data(selected_env, temp_template, {})
             
-        st.markdown("### Response")
-        
         # Separate Debug Info
         debug_info = None
         if isinstance(result, dict) and "_debug_request" in result:
             debug_info = result.pop("_debug_request")
             
-        if debug_info:
-            with st.expander("🐞 Debug Request Info", expanded=True):
-                st.json(debug_info)
-                
-        if isinstance(result, dict) and "error" in result and "status" in result and result["status"] == "failed":
-            st.error(f"Request Failed: {result['error']}")
+        # Display Status Code if available
+        status_code = result.get("_status_code", "N/A") if isinstance(result, dict) else "N/A"
+        if "_status_code" in result: del result["_status_code"]
+        
+        # 1. Status Bar
+        if isinstance(result, dict) and "error" in result and result.get("status") == "failed":
+            st.error(f"❌ Failed: {result['error']}")
         else:
-            st.success("Request Successful")
-            st.json(result)
+            st.success(f"✅ Success (Status: {status_code})")
+            
+            # --- Logic: Post-Process Extraction ---
+            if extract_var_name and extract_json_path:
+                from logic import extract_value_from_response
+                # Reuse existing extraction logic which takes a list of rules
+                # Rule format: {"source": "json_path", "target_var": "var_name"}
+                rule = {"source": extract_json_path, "target_var": extract_var_name}
+                extracted = extract_value_from_response(result, [rule])
+                
+                if extract_var_name in extracted:
+                    new_val = extracted[extract_var_name]
+                    
+                    # Update Environment Variables
+                    # 1. Check if var exists
+                    var_found = False
+                    for v in selected_env['variables']:
+                        if v['key'] == extract_var_name:
+                            v['value'] = str(new_val)
+                            var_found = True
+                            break
+                    
+                    # 2. Key does not exist -> Create
+                    if not var_found:
+                        selected_env['variables'].append({
+                            "key": extract_var_name,
+                            "value": str(new_val),
+                            "description": "Extracted from Playground"
+                        })
+                        
+                    # 3. Save to File
+                    save_json_file("environments.json", st.session_state.environments) # HARDCODED PATH mostly safe here as it matches defaults, but ideally passed in
+                    st.toast(f"✅ Updated variable '{extract_var_name}' with value: {new_val}", icon="💾")
+                else:
+                    st.warning(f"⚠️ Could not find path '{extract_json_path}' in response.")
+
+        # 2. Debug Info (Collapsible)
+        if debug_info:
+            with st.expander("ℹ️ Request Details"):
+                st.json(debug_info)
+
+        # 3. Response Body
+        st.json(result)

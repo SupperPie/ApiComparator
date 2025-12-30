@@ -74,29 +74,32 @@ def extract_value_from_response(response_data, extraction_rules):
         return extracted
         
     for rule in extraction_rules:
-        source_path = rule.get('source')
-        target_var = rule.get('target_var')
-        
-        if not source_path or not target_var:
-            continue
+        # Determine format
+        # 1. Legacy: {"source": "a", "target_var": "b"}
+        if 'source' in rule and 'target_var' in rule:
+            items = [(rule['target_var'], rule['source'])]
+        else:
+            # 2. Key-Value: {"token": "$.result.token"}
+            items = list(rule.items())
             
-        # Traverse
-        val = response_data
-        try:
-            parts = source_path.replace("$.", "").split('.')
-            for part in parts:
-                if isinstance(val, dict):
-                    val = val.get(part)
-                elif isinstance(val, list) and part.isdigit():
-                    val = val[int(part)]
-                else:
-                    val = None
-                    break
-            
-            if val is not None:
-                extracted[target_var] = val
-        except Exception:
-            pass # Extraction failed
+        for target_var, source_path in items:
+            # Traverse
+            val = response_data
+            try:
+                parts = source_path.replace("$.", "").split('.')
+                for part in parts:
+                    if isinstance(val, dict):
+                        val = val.get(part)
+                    elif isinstance(val, list) and part.isdigit():
+                        val = val[int(part)]
+                    else:
+                        val = None
+                        break
+                
+                if val is not None:
+                    extracted[target_var] = val
+            except Exception:
+                pass # Extraction failed
             
     return extracted
 
@@ -124,7 +127,7 @@ def fetch_api_data(env, api_template, runtime_context):
         env_vars = env_vars_raw
             
     # Combine: Runtime overrides Env
-    full_context = {**env_vars, **runtime_context}
+    full_context = {**env_vars, **(runtime_context or {})}
     
     # 1. Render URL
     try:
@@ -139,10 +142,12 @@ def fetch_api_data(env, api_template, runtime_context):
         return {"error": f"URL Construction Failed: {e}", "status": "failed"}
     
     # 2. Render Headers
-    auth_token = env.get('auth_token', '')
+    auth_token = full_context.get('auth_token', '')
+    
+    # Check if auth_token needs templating itself (unlikely if it comes from env vars directly, but good for robustness)
     auth_token = render_template_string(auth_token, full_context)
     
-    env_headers = env.get('headers', {})
+    env_headers = full_context.get('headers', {})
     if isinstance(env_headers, str):
         try: env_headers = json.loads(env_headers)
         except: env_headers = {}
@@ -266,7 +271,31 @@ def execute_comparison_run(selected_api_ids, selected_env_ids, environments, api
             
             if extract_rules and isinstance(data, dict):
                  new_vars = extract_value_from_response(data, extract_rules)
+                 
+                 # 2a. Update Runtime Context (For next API in chain)
                  runtime_context.update(new_vars)
+                 
+                 # 2b. Persist to Environment (Session State)
+                 # New requirement: "Refresh if exists, Create if not"
+                 # env['variables'] is a list of dicts: [{"key": "k", "value": "v", ...}]
+                 if 'variables' not in env or not isinstance(env['variables'], list):
+                     env['variables'] = []
+                 
+                 for key, value in new_vars.items():
+                     str_val = str(value)
+                     # Find existing
+                     found = False
+                     for var_item in env['variables']:
+                         if var_item.get('key') == key:
+                             var_item['value'] = str_val
+                             found = True
+                             break
+                     if not found:
+                         env['variables'].append({
+                             "key": key,
+                             "value": str_val,
+                             "description": "Auto-extracted"
+                         })
                  
         return env['id'], results
 

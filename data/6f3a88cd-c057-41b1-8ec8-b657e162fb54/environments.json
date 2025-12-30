@@ -2,15 +2,26 @@
   {
     "name": "[QA]New",
     "base_url": "https://ase-qa.dragonpass.com/client-api",
-    "auth_token": "dd5bf520acd945d9b2fe7bce9ff3b525",
-    "variables": [],
+    "auth_token": "",
+    "variables": [
+      {
+        "key": "agent",
+        "value": "natwest",
+        "description": null
+      },
+      {
+        "key": "auth_token",
+        "value": "dd5bf520acd945d9b2fe7bce9ff3b525",
+        "description": "Migrated from Auth Token field"
+      }
+    ],
     "headers": {},
     "id": "a0933e5c-5bef-4f07-bee1-993cd9e6ffea"
   },
   {
     "name": "[UAT]Old",
     "base_url": "https://ase-uat.dragonpass.com/client-api",
-    "auth_token": "dd5bf520acd945d9b2fe7bce9ff3b525",
+    "auth_token": "",
     "variables": [
       {
         "key": "LOGIN_USERNAME",
@@ -21,17 +32,14 @@
         "key": "LOGIN_PASSWORD",
         "value": "Aa1234567!",
         "description": null
+      },
+      {
+        "key": "auth_token",
+        "value": "dd5bf520acd945d9b2fe7bce9ff3b525",
+        "description": "Migrated from Auth Token field"
       }
     ],
     "headers": {},
     "id": "67adb084-e3d7-4c3c-8b27-dc7f261720b3"
-  },
-  {
-    "name": null,
-    "base_url": null,
-    "auth_token": null,
-    "variables": [],
-    "headers": {},
-    "id": "120305a3-181d-4e37-9d7a-f0feade79c77"
   }
 ]
