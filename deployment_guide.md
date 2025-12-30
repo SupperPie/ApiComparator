@@ -76,3 +76,27 @@ docker logs api-comparator-app
     ```bash
     docker run -d -p 8501:8501 -v $(pwd)/data:/app/data --name api-comparator api-comparator
     ```
+
+## Alternative: Simplified Deployment (No Docker)
+
+If you prefer to run the application directly on the server without Docker, we have provided a automated script.
+
+### 1. Requirements
+*   Python 3.8+ installed.
+*   `pip` installed.
+
+### 2. Quick Start
+Run the deployment script:
+```bash
+./deploy.sh
+```
+This script will:
+1.  Install dependencies from `requirements.txt`.
+2.  Stop any existing running instance of the app.
+3.  Start the new version in the background (nohup) on port 8501.
+
+### 3. Logs
+Logs are written to `app.log`. View them with:
+```bash
+tail -f app.log
+```
