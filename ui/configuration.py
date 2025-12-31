@@ -93,7 +93,7 @@ def render_configuration(api_template_file, env_config_file):
         api_df = pd.DataFrame(st.session_state.api_templates)
         
         # Ensure Columns
-        cols = ["name", "relative_path", "method", "headers", "params", "json_body", "id"]
+        cols = ["name", "relative_path", "method", "headers", "params", "json_body", "extract", "id"]
         for c in cols:
             if c not in api_df.columns: api_df[c] = None
 
