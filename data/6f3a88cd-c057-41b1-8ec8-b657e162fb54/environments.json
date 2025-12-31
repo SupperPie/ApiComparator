@@ -37,6 +37,11 @@
         "key": "auth_token",
         "value": "dd5bf520acd945d9b2fe7bce9ff3b525",
         "description": "Migrated from Auth Token field"
+      },
+      {
+        "key": "Authorization",
+        "value": "50f3f30849c3431d959ceaa4827a4909",
+        "description": "Auto-extracted"
       }
     ],
     "headers": {},

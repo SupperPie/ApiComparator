@@ -171,7 +171,7 @@ if st.session_state.current_project_id:
     elif st.session_state.page == "configuration":
         ui.render_configuration(current_paths['api_file'], current_paths['env_file'])
     elif st.session_state.page == "comparator":
-        ui.render_comparator(current_paths['history_file'], current_paths['env_file'])
+        ui.render_comparator(current_paths['history_file'], current_paths['env_file'], current_paths['api_file'])
     elif st.session_state.page == "playground":
         ui.render_debugger()
 else:

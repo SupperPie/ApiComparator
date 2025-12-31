@@ -7,7 +7,7 @@
     "headers": {
       "channel": "ASE"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "password": "{{LOGIN_PASSWORD}}",
       "userName": "{{LOGIN_USERNAME}}"
@@ -27,7 +27,7 @@
     "headers": {
       "channel": "ASE"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "channel": "barclays"
     },
@@ -44,13 +44,13 @@
     "headers": {
       "channel": "ASE"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "channel": "{{agent}}"
     },
     "order": 0,
     "extract": [
-      123
+      124
     ]
   },
   {
@@ -61,7 +61,7 @@
     "headers": {
       "channel": "ASE"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "channel": "barclays"
     },
@@ -76,7 +76,7 @@
     "headers": {
       "channel": "ASE"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "type": "accessibility"
     },
@@ -91,7 +91,7 @@
     "headers": {
       "channel": "ASE"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "type": "dining-terms"
     },
@@ -106,7 +106,7 @@
     "headers": {
       "channel": "ASE"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "type": "privacy-policy"
     },
@@ -121,7 +121,7 @@
     "headers": {
       "channel": "ASE"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "type": "terms-use"
     },
@@ -136,7 +136,7 @@
     "headers": {
       "channel": " ASE"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "type": "visit-website"
     },
@@ -149,7 +149,7 @@
     "relative_path": "/lounge/detail/v2",
     "method": "POST",
     "headers": {},
-    "params": {},
+    "params": null,
     "json_body": {
       "code": "N02617"
     },
@@ -164,7 +164,7 @@
     "headers": {
       "Authorization": "{{Authorization}}"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "code": "{{Ncode}}",
       "passengersNum": 1
@@ -180,7 +180,7 @@
     "headers": {
       "Authorization": "{{Authorization}}"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "code": "{{Ncode}}",
       "passengersNum": 3,
@@ -197,7 +197,7 @@
     "headers": {
       "Authorization": "{{Authorization}}"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "date": "{{Date}}",
       "code": "{{Ncode}}",
@@ -236,7 +236,7 @@
     "headers": {
       "Authorization": "{{Authorization}}"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "date": "{{Date}}",
       "code": "{{Ncode}}",
@@ -255,7 +255,7 @@
     "headers": {
       "channel": "ASE"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "version": "1.3.14"
     },
@@ -270,7 +270,7 @@
     "headers": {
       "Authorization": "{{Authorization}}"
     },
-    "params": {},
+    "params": null,
     "json_body": {
       "code": "{{Ncode}}",
       "num": 1,

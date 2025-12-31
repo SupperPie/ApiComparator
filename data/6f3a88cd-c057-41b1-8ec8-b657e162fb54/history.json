@@ -1,5 +1,261 @@
 [
   {
+    "run_id": "5b051d48-ee33-46be-b1c3-6f7c5cd3c57c",
+    "timestamp": "2025-12-31 10:49:23",
+    "envs": [
+      "[QA]New",
+      "[UAT]Old"
+    ],
+    "api_count": 1,
+    "consistent_count": 0,
+    "inconsistent_count": 1,
+    "error_count": 0,
+    "api_results": {
+      "80962031-3231-4f87-b86c-9665d6573a01": {
+        "id": "80962031-3231-4f87-b86c-9665d6573a01",
+        "name": "Account Login and get token",
+        "order": 0,
+        "data_by_env": {
+          "a0933e5c-5bef-4f07-bee1-993cd9e6ffea": {
+            "env_name": "[QA]New",
+            "data": {
+              "state": "0",
+              "msg": "用户登录信息有误",
+              "errorCode": "30004",
+              "result": {
+                "outputType": "normal"
+              },
+              "_status_code": 200,
+              "_debug_request": {
+                "url": "https://ase-qa.dragonpass.com/client-api/login/gen-token",
+                "method": "POST",
+                "headers": {
+                  "Authorization": "dd5bf520acd945d9b2fe7bce9ff3b525",
+                  "Content-Type": "application/json",
+                  "channel": "ASE"
+                },
+                "params": null,
+                "body": {
+                  "password": "{{LOGIN_PASSWORD}}",
+                  "userName": "{{LOGIN_USERNAME}}"
+                },
+                "context_used": {
+                  "agent": "natwest",
+                  "auth_token": "dd5bf520acd945d9b2fe7bce9ff3b525"
+                }
+              }
+            }
+          },
+          "67adb084-e3d7-4c3c-8b27-dc7f261720b3": {
+            "env_name": "[UAT]Old",
+            "data": {
+              "state": "1",
+              "result": {
+                "token": "50f3f30849c3431d959ceaa4827a4909",
+                "tokenExpirySeconds": 21600,
+                "userInfo": {
+                  "id": "1891395742561599490",
+                  "createTime": "2025-02-17T07:54:20",
+                  "updateTime": "2025-12-29T12:05:33",
+                  "deleted": 0,
+                  "firstName": "test20",
+                  "lastName": "dpc",
+                  "birthday": "1970-01-01",
+                  "email": "apc_uat_api@yopmail.com",
+                  "countryCode": "GB",
+                  "mobileNoPrefix": "44",
+                  "mobileNo": "7802132006",
+                  "lang": "en",
+                  "channel": "16882",
+                  "mobileNotCheck": "1",
+                  "emailNotCheck": "0",
+                  "customerId": "202502132006",
+                  "postCode": "NW11AA",
+                  "addressLine1": "London",
+                  "clientReference": "202502132006",
+                  "loginNum": 3
+                },
+                "isFirstLogin": false,
+                "agentLogo": {
+                  "homeTop": "https://dp-oss.dragonpass.com/uat-img/4ffff16d2eb54805b3e20b5d2d468b2c.png",
+                  "card": "https://dp-oss.dragonpass.com/uat-img/fe18b9f691be4a73876de97d9b571473.png",
+                  "cardTop": "https://ossimg.blob.core.windows.net/test-img/4c52cb1abfd8461ca946531a83453701.png"
+                },
+                "agentColor": {
+                  "channel": "barclays",
+                  "color": {
+                    "global": "#0076B6",
+                    "dark": "#01194D",
+                    "selectorNormal": "#9ba6bb",
+                    "homeTabSelectorNormal": "#687898",
+                    "pageColor": "#0076B6",
+                    "cardBgStart": "#01305C",
+                    "cardBgMask": "#00507F",
+                    "cardBgEnd": "#141530",
+                    "underline": "#00AEEF",
+                    "background": "#F4FAFC",
+                    "cardDetailBgLogo": "https://oss-images.dragonpass.com.cn/uploadFile/app/20220914/duet_card_bg.png",
+                    "promoTag": "#0076B6",
+                    "homeTabSelectorDark": "#0076B6"
+                  }
+                },
+                "membership": {
+                  "dpid": "2024101200103288",
+                  "cardHolder": "test20 dpc",
+                  "expiry": "17/02/2026",
+                  "isInUsed": true,
+                  "cardStatus": "Available",
+                  "entitlement": {
+                    "qrCode": "2024101200103288      = 5092677844",
+                    "membershipNote": "Your membership entitlements are shown below. Additional passes can be purchased here.",
+                    "equities": [
+                      {
+                        "title": "Cardholder/Guest free pass:",
+                        "content": "0"
+                      },
+                      {
+                        "title": "Purchased pass:",
+                        "desc": "*Cardholder or Guest",
+                        "content": "0"
+                      }
+                    ]
+                  },
+                  "buyPass": true,
+                  "cardBg": "https://oss-images.dragonpass.com.cn/uploadFile/app/20220914/duet_card_bg.png"
+                },
+                "isNeedRateApp": false,
+                "isAddCard": false,
+                "isSupportCip": false,
+                "isExistExpiredPayCard": false
+              },
+              "_status_code": 200,
+              "_debug_request": {
+                "url": "https://ase-uat.dragonpass.com/client-api/login/gen-token",
+                "method": "POST",
+                "headers": {
+                  "Authorization": "dd5bf520acd945d9b2fe7bce9ff3b525",
+                  "Content-Type": "application/json",
+                  "channel": "ASE"
+                },
+                "params": null,
+                "body": {
+                  "password": "Aa1234567!",
+                  "userName": "apc_uat_api@yopmail.com"
+                },
+                "context_used": {
+                  "LOGIN_USERNAME": "apc_uat_api@yopmail.com",
+                  "LOGIN_PASSWORD": "Aa1234567!",
+                  "auth_token": "dd5bf520acd945d9b2fe7bce9ff3b525"
+                }
+              }
+            }
+          }
+        },
+        "comparisons": {
+          "[QA]New vs [UAT]Old": {
+            "status": "Inconsistent",
+            "diff": {
+              "dictionary_item_removed": [
+                "root['msg']",
+                "root['errorCode']"
+              ],
+              "values_changed": {
+                "root['state']": {
+                  "new_value": "1",
+                  "old_value": "0"
+                },
+                "root['result']": {
+                  "new_value": {
+                    "token": "50f3f30849c3431d959ceaa4827a4909",
+                    "tokenExpirySeconds": 21600,
+                    "userInfo": {
+                      "id": "1891395742561599490",
+                      "createTime": "2025-02-17T07:54:20",
+                      "updateTime": "2025-12-29T12:05:33",
+                      "deleted": 0,
+                      "firstName": "test20",
+                      "lastName": "dpc",
+                      "birthday": "1970-01-01",
+                      "email": "apc_uat_api@yopmail.com",
+                      "countryCode": "GB",
+                      "mobileNoPrefix": "44",
+                      "mobileNo": "7802132006",
+                      "lang": "en",
+                      "channel": "16882",
+                      "mobileNotCheck": "1",
+                      "emailNotCheck": "0",
+                      "customerId": "202502132006",
+                      "postCode": "NW11AA",
+                      "addressLine1": "London",
+                      "clientReference": "202502132006",
+                      "loginNum": 3
+                    },
+                    "isFirstLogin": false,
+                    "agentLogo": {
+                      "homeTop": "https://dp-oss.dragonpass.com/uat-img/4ffff16d2eb54805b3e20b5d2d468b2c.png",
+                      "card": "https://dp-oss.dragonpass.com/uat-img/fe18b9f691be4a73876de97d9b571473.png",
+                      "cardTop": "https://ossimg.blob.core.windows.net/test-img/4c52cb1abfd8461ca946531a83453701.png"
+                    },
+                    "agentColor": {
+                      "channel": "barclays",
+                      "color": {
+                        "global": "#0076B6",
+                        "dark": "#01194D",
+                        "selectorNormal": "#9ba6bb",
+                        "homeTabSelectorNormal": "#687898",
+                        "pageColor": "#0076B6",
+                        "cardBgStart": "#01305C",
+                        "cardBgMask": "#00507F",
+                        "cardBgEnd": "#141530",
+                        "underline": "#00AEEF",
+                        "background": "#F4FAFC",
+                        "cardDetailBgLogo": "https://oss-images.dragonpass.com.cn/uploadFile/app/20220914/duet_card_bg.png",
+                        "promoTag": "#0076B6",
+                        "homeTabSelectorDark": "#0076B6"
+                      }
+                    },
+                    "membership": {
+                      "dpid": "2024101200103288",
+                      "cardHolder": "test20 dpc",
+                      "expiry": "17/02/2026",
+                      "isInUsed": true,
+                      "cardStatus": "Available",
+                      "entitlement": {
+                        "qrCode": "2024101200103288      = 5092677844",
+                        "membershipNote": "Your membership entitlements are shown below. Additional passes can be purchased here.",
+                        "equities": [
+                          {
+                            "title": "Cardholder/Guest free pass:",
+                            "content": "0"
+                          },
+                          {
+                            "title": "Purchased pass:",
+                            "desc": "*Cardholder or Guest",
+                            "content": "0"
+                          }
+                        ]
+                      },
+                      "buyPass": true,
+                      "cardBg": "https://oss-images.dragonpass.com.cn/uploadFile/app/20220914/duet_card_bg.png"
+                    },
+                    "isNeedRateApp": false,
+                    "isAddCard": false,
+                    "isSupportCip": false,
+                    "isExistExpiredPayCard": false
+                  },
+                  "old_value": {
+                    "outputType": "normal"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "overall_status": "Inconsistent"
+      }
+    }
+  },
+  {
     "run_id": "46d65b06-89bb-46eb-ad56-2c7fd358df4b",
     "timestamp": "2025-12-30 11:05:51",
     "envs": [

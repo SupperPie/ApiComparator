@@ -21,7 +21,7 @@ MarkupSafe
 narwhals
 numpy
 orderly-set
-packaging
+packaging<25
 pandas
 pillow
 protobuf
