@@ -219,23 +219,29 @@ def render_comparator(history_file, env_config_file, api_template_file):
 
         exp_col1, exp_col2, _ = st.columns([1, 1, 4])
         with exp_col1:
-            pdf_data = generate_pdf_report(res)
-            st.download_button(
-                label="⬇️ Export PDF",
-                data=pdf_data,
-                file_name=f"Comparison_Report_{res['timestamp'].replace(' ', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+            try:
+                pdf_data = generate_pdf_report(res)
+                st.download_button(
+                    label="⬇️ Export PDF",
+                    data=pdf_data,
+                    file_name=f"Comparison_Report_{res['timestamp'].replace(' ', '_')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"PDF Error: {str(e)[:50]}...")
         with exp_col2:
-            word_data = generate_word_report(res)
-            st.download_button(
-                label="⬇️ Export Word",
-                data=word_data,
-                file_name=f"Comparison_Report_{res['timestamp'].replace(' ', '_')}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True
-            )
+            try:
+                word_data = generate_word_report(res)
+                st.download_button(
+                    label="⬇️ Export Word",
+                    data=word_data,
+                    file_name=f"Comparison_Report_{res['timestamp'].replace(' ', '_')}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"Word Error: {str(e)[:50]}...")
         
         f_col1, f_col2 = st.columns([1, 4])
         with f_col1:

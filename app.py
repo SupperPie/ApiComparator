@@ -1,4 +1,13 @@
 import streamlit as st
+import hashlib
+
+# --- Patch for reportlab/hashlib compatibility on some Python 3.8 environments ---
+_original_md5 = hashlib.md5
+def _patched_md5(*args, **kwargs):
+    if 'usedforsecurity' in kwargs:
+        kwargs.pop('usedforsecurity')
+    return _original_md5(*args, **kwargs)
+hashlib.md5 = _patched_md5
 from logic import load_json_file
 import ui
 from project_manager import ProjectManager
