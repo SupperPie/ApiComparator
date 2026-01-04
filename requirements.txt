@@ -47,3 +47,5 @@ uvicorn
 uvloop
 watchfiles
 websockets
+reportlab
+python-docx
