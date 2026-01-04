@@ -212,6 +212,9 @@ def inject_custom_css():
     """, unsafe_allow_html=True)
 
 # --- Visual Diff Helper ---
+import streamlit as st
+
+@st.cache_data(show_spinner=False)
 def generate_side_by_side_html(data_list):
     """
     Generates HTML for side-by-side comparison with Unified Folding.

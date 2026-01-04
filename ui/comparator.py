@@ -21,6 +21,32 @@ def calculate_api_similarity(api_data):
         pass
     return 0
 
+@st.fragment
+def render_api_result_row(api_id, api_data, run_timestamp):
+    icon = "🟢" if api_data['overall_status'] == "Consistent" else "🔴"
+    similarity_score = api_data.get('similarity', 100)
+    title_text = f"{icon} [{similarity_score}%] {api_data['name']}"
+    
+    with st.expander(title_text):
+        comparison_data = []
+        debug_info = None
+        
+        for env_id, env_entry in api_data['data_by_env'].items():
+            content_to_show = env_entry['data'].copy()
+            if "_debug_request" in content_to_show:
+                debug_info = content_to_show.pop("_debug_request")
+            
+            comparison_data.append({
+                "name": env_entry['env_name'],
+                "content": content_to_show
+            })
+        
+        if debug_info:
+            if st.checkbox("🐞 Show Debug Info", key=f"debug_{api_id}_{run_timestamp}"):
+                st.json(debug_info)
+        
+        st.markdown(generate_side_by_side_html(comparison_data), unsafe_allow_html=True)
+
 def render_comparator(history_file, env_config_file, api_template_file):
     st.title("🚀 Comparator")
     
@@ -250,36 +276,38 @@ def render_comparator(history_file, env_config_file, api_template_file):
             except Exception as e:
                 st.error(f"Word Error: {str(e)[:50]}...")
         
-        f_col1, f_col2 = st.columns([1, 4])
+        f_col1, f_col2, f_col3 = st.columns([1, 1, 3])
         with f_col1:
             filter_status = st.selectbox("Show:", ["All", "Same", "Different", "Error"], index=0)
         
+        # --- Pagination Logic ---
+        # 1. Gather all filtered APIs
+        filtered_api_list = []
         for api_id, api_data in res['api_results'].items():
             if filter_status == "Different" and api_data['overall_status'] == "Consistent": continue
             if filter_status == "Same" and api_data['overall_status'] != "Consistent": continue
             if filter_status == "Error" and api_data['overall_status'] != "Error": continue
-                
-            similarity_score = api_data.get('similarity', 100)
-            
-            icon = "🟢" if api_data['overall_status'] == "Consistent" else "🔴"
-            title_text = f"{icon} [{similarity_score}%] {api_data['name']}"
-            
-            with st.expander(title_text):
-                comparison_data = []
-                debug_info = None
-                
-                for env_id, env_entry in api_data['data_by_env'].items():
-                    content_to_show = env_entry['data'].copy()
-                    if "_debug_request" in content_to_show:
-                        debug_info = content_to_show.pop("_debug_request")
-                    
-                    comparison_data.append({
-                        "name": env_entry['env_name'],
-                        "content": content_to_show
-                    })
-                
-                if debug_info:
-                    if st.checkbox("🐞 Show Debug Info", key=f"debug_{api_id}_{res['timestamp']}"):
-                        st.json(debug_info)
-                
-                st.markdown(generate_side_by_side_html(comparison_data), unsafe_allow_html=True)
+            filtered_api_list.append((api_id, api_data))
+        
+        page_size = 10
+        total_apis = len(filtered_api_list)
+        total_pages = (total_apis + page_size - 1) // page_size if total_apis > 0 else 1
+        
+        with f_col2:
+            if total_pages > 1:
+                current_page = st.number_input(f"Page (1-{total_pages})", min_value=1, max_value=total_pages, value=1, step=1)
+            else:
+                current_page = 1
+                st.caption(f"Total: {total_apis}")
+        
+        # 2. Slice for current page
+        start_idx = (current_page - 1) * page_size
+        end_idx = start_idx + page_size
+        page_apis = filtered_api_list[start_idx:end_idx]
+        
+        # 3. Render page
+        for api_id, api_data in page_apis:
+            render_api_result_row(api_id, api_data, res['timestamp'])
+        
+        if total_pages > 1:
+            st.info(f"Showing {start_idx+1}-{min(end_idx, total_apis)} of {total_apis} results")
