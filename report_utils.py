@@ -1,4 +1,5 @@
 import io
+import streamlit as st
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -6,6 +7,7 @@ from reportlab.lib import colors
 from docx import Document
 from docx.shared import Inches
 
+@st.cache_data(show_spinner=False)
 def generate_pdf_report(results):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
@@ -63,6 +65,7 @@ def generate_pdf_report(results):
     buffer.seek(0)
     return buffer
 
+@st.cache_data(show_spinner=False)
 def generate_word_report(results):
     document = Document()
     document.add_heading('API Comparison Report', 0)

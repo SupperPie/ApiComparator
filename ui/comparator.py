@@ -8,6 +8,19 @@ from logic import execute_comparison_run, save_json_file
 from .common import generate_side_by_side_html
 from report_utils import generate_pdf_report, generate_word_report
 
+@st.cache_data(show_spinner=False)
+def calculate_api_similarity(api_data):
+    """Cached calculation of similarity between two environments' data."""
+    try:
+        env_keys = list(api_data['data_by_env'].keys())
+        if len(env_keys) >= 2:
+            ref_content = json.dumps({k:v for k,v in api_data['data_by_env'][env_keys[0]]['data'].items() if not k.startswith('_')}, sort_keys=True)
+            target_content = json.dumps({k:v for k,v in api_data['data_by_env'][env_keys[1]]['data'].items() if not k.startswith('_')}, sort_keys=True)
+            return int(difflib.SequenceMatcher(None, ref_content, target_content).ratio() * 100)
+    except:
+        pass
+    return 0
+
 def render_comparator(history_file, env_config_file, api_template_file):
     st.title("🚀 Comparator")
     
@@ -205,16 +218,10 @@ def render_comparator(history_file, env_config_file, api_template_file):
 
         # Pre-calculate similarity scores for all APIs for report export
         for api_id, api_data in res['api_results'].items():
-            similarity_score = 100
-            if (api_data['overall_status'] == "Inconsistent" or api_data['overall_status'] == "Error") and 'comparisons' in api_data:
-                try:
-                    env_keys = list(api_data['data_by_env'].keys())
-                    if len(env_keys) >= 2:
-                        ref_content = json.dumps({k:v for k,v in api_data['data_by_env'][env_keys[0]]['data'].items() if not k.startswith('_')}, sort_keys=True)
-                        target_content = json.dumps({k:v for k,v in api_data['data_by_env'][env_keys[1]]['data'].items() if not k.startswith('_')}, sort_keys=True)
-                        similarity_score = int(difflib.SequenceMatcher(None, ref_content, target_content).ratio() * 100)
-                except:
-                    similarity_score = 0
+            if api_data['overall_status'] == "Consistent":
+                similarity_score = 100
+            else:
+                similarity_score = calculate_api_similarity(api_data)
             api_data['similarity'] = similarity_score
 
         exp_col1, exp_col2, _ = st.columns([1, 1, 4])
