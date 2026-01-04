@@ -162,10 +162,10 @@ def fetch_api_data(env, api_template, runtime_context):
     api_headers = render_template_obj(api_headers, full_context)
 
     headers = {
-        'Authorization': auth_token,
+        'Authorization': auth_token.strip() if isinstance(auth_token, str) else auth_token,
         'Content-Type': 'application/json',
-        **env_headers,
-        **api_headers
+        **({k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in env_headers.items()} if isinstance(env_headers, dict) else {}),
+        **({k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in api_headers.items()} if isinstance(api_headers, dict) else {})
     }
     
     # 3. Render Params & Body
@@ -351,7 +351,6 @@ def execute_comparison_run(selected_api_ids, selected_env_ids, environments, api
             'ignore_order': api_tpl.get('ignore_order', False),
             'exclude_paths': api_tpl.get('ignore_paths', [])
         }
-        
         for i in range(1, len(selected_envs)):
             target_env = selected_envs[i]
             if target_env['id'] not in api_results[api_id]["data_by_env"]:
@@ -360,23 +359,25 @@ def execute_comparison_run(selected_api_ids, selected_env_ids, environments, api
             target_entry = api_results[api_id]["data_by_env"][target_env['id']]
             target_data = target_entry['data']
             
+            # Clean data keys starting with _ (debug/status)
             clean_target = {k:v for k,v in target_data.items() if not k.startswith('_')} if isinstance(target_data, dict) else target_data
             
             comp_key = f"{ref_env['name']} vs {target_env['name']}"
             
-            # Simple check for error
-            if isinstance(clean_ref, dict) and "error" in clean_ref: 
-                 status = "Error"; diff_output = "Reference API Failed"
-            elif isinstance(clean_target, dict) and "error" in clean_target:
-                 status = "Error"; diff_output = "Target API Failed"
-            else:
-                ddiff = DeepDiff(clean_ref, clean_target, **diff_options)
-                if ddiff:
-                    status = "Inconsistent"
-                    diff_output = make_serializable(ddiff.to_dict())
+            # Use DeepDiff to check for consistency
+            ddiff = DeepDiff(clean_ref, clean_target, **diff_options)
+            
+            if ddiff:
+                # If they are different, check if it's because of an error
+                if (isinstance(clean_ref, dict) and "error" in clean_ref) or (isinstance(clean_target, dict) and "error" in clean_target):
+                    status = "Error"
                 else:
-                    status = "Consistent"
-                    diff_output = None
+                    status = "Inconsistent"
+                diff_output = make_serializable(ddiff.to_dict())
+            else:
+                # Both are identical (even if they both failed with the same error)
+                status = "Consistent"
+                diff_output = None
             
             api_results[api_id]["comparisons"][comp_key] = {"status": status, "diff": diff_output}
             if status != "Consistent":

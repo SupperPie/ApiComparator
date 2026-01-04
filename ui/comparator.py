@@ -6,6 +6,7 @@ import time
 import uuid
 from logic import execute_comparison_run, save_json_file
 from .common import generate_side_by_side_html
+from report_utils import generate_pdf_report, generate_word_report
 
 def render_comparator(history_file, env_config_file, api_template_file):
     st.title("🚀 Comparator")
@@ -162,13 +163,14 @@ def render_comparator(history_file, env_config_file, api_template_file):
                     status_place.caption(msg)
                 
                 # Execute Logic
-                results = execute_comparison_run(
-                    selected_api_ids, 
-                    selected_env_ids, 
-                    st.session_state.environments, 
-                    st.session_state.api_templates, 
-                    progress_callback=update_progress
-                )
+                with st.spinner("🚀 Comparing APIs across environments..."):
+                    results = execute_comparison_run(
+                        selected_api_ids, 
+                        selected_env_ids, 
+                        st.session_state.environments, 
+                        st.session_state.api_templates, 
+                        progress_callback=update_progress
+                    )
                 
                 # Update State & Save
                 st.session_state.current_run_results = results
@@ -178,6 +180,7 @@ def render_comparator(history_file, env_config_file, api_template_file):
                 # Save Environments (extraction might have updated them)
                 save_json_file(env_config_file, st.session_state.environments)
                 
+                st.success("Comparison completed!")
                 st.rerun()
 
     # --- Analysis / Results View ---
@@ -199,6 +202,40 @@ def render_comparator(history_file, env_config_file, api_template_file):
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # Pre-calculate similarity scores for all APIs for report export
+        for api_id, api_data in res['api_results'].items():
+            similarity_score = 100
+            if (api_data['overall_status'] == "Inconsistent" or api_data['overall_status'] == "Error") and 'comparisons' in api_data:
+                try:
+                    env_keys = list(api_data['data_by_env'].keys())
+                    if len(env_keys) >= 2:
+                        ref_content = json.dumps({k:v for k,v in api_data['data_by_env'][env_keys[0]]['data'].items() if not k.startswith('_')}, sort_keys=True)
+                        target_content = json.dumps({k:v for k,v in api_data['data_by_env'][env_keys[1]]['data'].items() if not k.startswith('_')}, sort_keys=True)
+                        similarity_score = int(difflib.SequenceMatcher(None, ref_content, target_content).ratio() * 100)
+                except:
+                    similarity_score = 0
+            api_data['similarity'] = similarity_score
+
+        exp_col1, exp_col2, _ = st.columns([1, 1, 4])
+        with exp_col1:
+            pdf_data = generate_pdf_report(res)
+            st.download_button(
+                label="⬇️ Export PDF",
+                data=pdf_data,
+                file_name=f"Comparison_Report_{res['timestamp'].replace(' ', '_')}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        with exp_col2:
+            word_data = generate_word_report(res)
+            st.download_button(
+                label="⬇️ Export Word",
+                data=word_data,
+                file_name=f"Comparison_Report_{res['timestamp'].replace(' ', '_')}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True
+            )
         
         f_col1, f_col2 = st.columns([1, 4])
         with f_col1:
@@ -209,18 +246,7 @@ def render_comparator(history_file, env_config_file, api_template_file):
             if filter_status == "Same" and api_data['overall_status'] != "Consistent": continue
             if filter_status == "Error" and api_data['overall_status'] != "Error": continue
                 
-            similarity_score = 100
-            if api_data['overall_status'] == "Inconsistent" and 'comparisons' in api_data:
-                try:
-                    env_keys = list(api_data['data_by_env'].keys())
-                    if len(env_keys) >= 2:
-                        ref_content = json.dumps(api_data['data_by_env'][env_keys[0]]['data'], sort_keys=True)
-                        target_content = json.dumps(api_data['data_by_env'][env_keys[1]]['data'], sort_keys=True)
-                        similarity_score = int(difflib.SequenceMatcher(None, ref_content, target_content).ratio() * 100)
-                except:
-                    similarity_score = 0
-            elif api_data['overall_status'] == "Error":
-                similarity_score = 0
+            similarity_score = api_data.get('similarity', 100)
             
             icon = "🟢" if api_data['overall_status'] == "Consistent" else "🔴"
             title_text = f"{icon} [{similarity_score}%] {api_data['name']}"

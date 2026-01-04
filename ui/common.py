@@ -94,9 +94,7 @@ def inject_custom_css():
             display: flex; 
             gap: 12px; 
             width: 100%; 
-            /* Shared Scrollbar Logic: Parent scrolls vertically */
-            max-height: 700px;
-            overflow-y: auto;
+            /* Let parent or page handle scroll */
             overflow-x: auto;
             padding-bottom: 8px; 
             position: relative;
@@ -219,6 +217,9 @@ def generate_side_by_side_html(data_list):
     Generates HTML for side-by-side comparison with Unified Folding.
     data_list: List of dicts [{'name': 'Env Name', 'content': json_obj}]
     """
+    if not data_list:
+        return '<div style="color: #64748b; font-style: italic; padding: 20px;">No comparison data available.</div>'
+
     json_strs = []
     for item in data_list:
         s = json.dumps(item['content'], indent=2, ensure_ascii=False, sort_keys=True)
