@@ -244,6 +244,7 @@ def execute_comparison_run(selected_api_ids, selected_env_ids, environments, api
         api_results[api_tpl['id']] = {
             "id": api_tpl['id'],
             "name": api_tpl['name'],
+            "relative_path": api_tpl.get('relative_path', ''),
             "order": api_tpl.get('order', 0),
             "data_by_env": {},
             "comparisons": {},
