@@ -35,32 +35,36 @@ def save_json_file(file_path, data):
 
 # --- Variable Logic ---
 
-def render_template_string(template_str, context):
+def render_template_string(template_str, context, used_keys=None):
     """
     Replace {{variable}} in template_str using values from context dict.
     """
     if not isinstance(template_str, str):
         return template_str
     
-    # Simple regex for {{var}}
-    pattern = re.compile(r'\{\{\s*(\w+)\s*\}\}')
+    # regex for {{var}}, permissive on characters between curly braces
+    pattern = re.compile(r'\{\{\s*([^\}]+?)\s*\}\}')
     
     def replace_match(match):
-        var_name = match.group(1)
-        return str(context.get(var_name, match.group(0))) # Default to raw string if missing
+        var_name = match.group(1).strip()
+        if var_name in context:
+            if used_keys is not None:
+                used_keys.add(var_name)
+            return str(context.get(var_name))
+        return match.group(0) # Default to raw string if missing
     
     return pattern.sub(replace_match, template_str)
 
-def render_template_obj(obj, context):
+def render_template_obj(obj, context, used_keys=None):
     """
     Recursively render templates in a dict/list structure.
     """
     if isinstance(obj, str):
-        return render_template_string(obj, context)
+        return render_template_string(obj, context, used_keys)
     elif isinstance(obj, list):
-        return [render_template_obj(item, context) for item in obj]
+        return [render_template_obj(item, context, used_keys) for item in obj]
     elif isinstance(obj, dict):
-        return {k: render_template_obj(v, context) for k, v in obj.items()}
+        return {k: render_template_obj(v, context, used_keys) for k, v in obj.items()}
     return obj
 
 def extract_value_from_response(response_data, extraction_rules):
@@ -119,23 +123,27 @@ def fetch_api_data(env, api_template, runtime_context):
     
     env_vars = {}
     if isinstance(env_vars_raw, list):
-        # Flatten list to dict
+        # Flatten list to dict and TRIM keys/values
         for item in env_vars_raw:
             if isinstance(item, dict) and 'key' in item:
-                env_vars[item['key']] = item.get('value', '')
+                k = item['key'].strip() if isinstance(item['key'], str) else item['key']
+                v = item.get('value', '')
+                v = v.strip() if isinstance(v, str) else v
+                env_vars[k] = v
     elif isinstance(env_vars_raw, dict):
-        env_vars = env_vars_raw
+        env_vars = {k.strip() if isinstance(k, str) else k: (v.strip() if isinstance(v, str) else v) for k, v in env_vars_raw.items()}
             
     # Combine: Runtime overrides Env
     full_context = {**env_vars, **(runtime_context or {})}
+    used_keys = set()
     
     # 1. Render URL
     try:
         base_url_raw = env.get('base_url', '').rstrip('/') + '/'
-        base_url = render_template_string(base_url_raw, full_context)
+        base_url = render_template_string(base_url_raw, full_context, used_keys)
         
         rel_path_raw = api_template.get('relative_path', '').lstrip('/')
-        relative_path = render_template_string(rel_path_raw, full_context)
+        relative_path = render_template_string(rel_path_raw, full_context, used_keys)
         
         full_url = urljoin(base_url, relative_path)
     except Exception as e:
@@ -143,9 +151,7 @@ def fetch_api_data(env, api_template, runtime_context):
     
     # 2. Render Headers
     auth_token = full_context.get('auth_token', '')
-    
-    # Check if auth_token needs templating itself (unlikely if it comes from env vars directly, but good for robustness)
-    auth_token = render_template_string(auth_token, full_context)
+    auth_token = render_template_string(auth_token, full_context, used_keys)
     
     env_headers = full_context.get('headers', {})
     if isinstance(env_headers, str):
@@ -158,8 +164,8 @@ def fetch_api_data(env, api_template, runtime_context):
         except: api_headers = {}
         
     # Render values in headers
-    env_headers = render_template_obj(env_headers, full_context)
-    api_headers = render_template_obj(api_headers, full_context)
+    env_headers = render_template_obj(env_headers, full_context, used_keys)
+    api_headers = render_template_obj(api_headers, full_context, used_keys)
 
     headers = {
         'Authorization': auth_token.strip() if isinstance(auth_token, str) else auth_token,
@@ -173,23 +179,25 @@ def fetch_api_data(env, api_template, runtime_context):
     if isinstance(params, str):
         try: params = json.loads(params) if params.strip() else None
         except: params = None
-    params = render_template_obj(params, full_context)
+    params = render_template_obj(params, full_context, used_keys)
             
     json_body = api_template.get('json_body')
     if isinstance(json_body, str):
         try: json_body = json.loads(json_body) if json_body.strip() else None
         except: json_body = None
     if json_body is None: json_body = {}
-    json_body = render_template_obj(json_body, full_context)
+    json_body = render_template_obj(json_body, full_context, used_keys)
 
-    # Debug Info
+    # Debug Info - Only include variables that were actually used
+    context_used_filtered = {k: full_context[k] for k in used_keys if k in full_context}
+    
     request_info = {
         "url": full_url,
         "method": api_template['method'],
         "headers": headers,
         "params": params,
         "body": json_body,
-        "context_used": full_context
+        "context_used": context_used_filtered
     }
     print(f"DEBUG REQUEST: {json.dumps(request_info, default=str)}")
     

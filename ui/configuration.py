@@ -73,9 +73,9 @@ def render_configuration(api_template_file, env_config_file):
             
             # Delete Selected
             with b3:
-                delete_selected_clicked = st.button("Delete Selected", type="primary", use_container_width=True)
+                delete_selected_clicked = st.button("🗑️ Delete Selected", type="secondary", use_container_width=True)
+
             
-        # Success Message Area (for Auto-Save)
         if 'autosave_success' in st.session_state and st.session_state.autosave_success:
              if 'save_timestamp' not in st.session_state:
                  st.session_state.save_timestamp = time.time()
@@ -89,6 +89,18 @@ def render_configuration(api_template_file, env_config_file):
         if 'autosave_error' in st.session_state and st.session_state.autosave_error:
              msg_placeholder.error(f"❌ Save Failed: {st.session_state.autosave_error}")
 
+        if 'api_templates' not in st.session_state: st.session_state.api_templates = []
+        
+        # Simulated "Select All" Header
+        def toggle_select_all():
+            target = st.session_state.get("select_all_apis_master", False)
+            for item in st.session_state.api_templates:
+                item['_selected'] = target
+
+        c_tools_1, c_tools_2 = st.columns([1, 1])
+        with c_tools_1:
+             st.checkbox("Toggle All Selection", key="select_all_apis_master", on_change=toggle_select_all)
+        
         # --- Data Table ---
         api_df = pd.DataFrame(st.session_state.api_templates)
         
@@ -107,13 +119,11 @@ def render_configuration(api_template_file, env_config_file):
             if json_col in api_df.columns:
                 api_df[json_col] = api_df[json_col].apply(to_json_str)
 
-        # Add Select Column for Deletion
-        if "Select" not in api_df.columns:
-            api_df.insert(0, "Select", False)
-        else:
-            api_df["Select"] = api_df["Select"].fillna(False).astype(bool)
+        for item in st.session_state.api_templates:
+             if '_selected' not in item: item['_selected'] = False
+        api_df["Select"] = [item.get('_selected', False) for item in st.session_state.api_templates]
 
-        # Data Editor (Force Reload with key)
+        # Data Editor (Reverted to manual Select column to avoid TypeError)
         edited_api_df = st.data_editor(
             api_df,
             column_config={
@@ -140,7 +150,7 @@ def render_configuration(api_template_file, env_config_file):
             use_container_width=True,
             hide_index=True,
             num_rows="dynamic",
-            key=f"config_api_editor_{len(api_df)}"
+            key="config_api_editor"
         )
         
         # LOGIC: AUTO-SAVE
@@ -164,7 +174,10 @@ def render_configuration(api_template_file, env_config_file):
                     if not row.get('relative_path') and not row.get('name'):
                          continue
 
+                    # Sync Selection
+                    row['_selected'] = row.get('Select', False)
                     if 'Select' in row: del row['Select']
+                    
                     if not row.get('id'): row['id'] = str(uuid.uuid4())
                     row['order'] = int(row.get('order', 0) or 0)
 
@@ -182,8 +195,6 @@ def render_configuration(api_template_file, env_config_file):
 
                     filtered_data.append(row)
 
-                filtered_data.sort(key=lambda x: (x.get('order', 0), x.get('name', '')))
-
                 st.session_state.api_templates = filtered_data
                 save_json_file(api_template_file, st.session_state.api_templates)
                 st.session_state.autosave_success = True
@@ -194,7 +205,6 @@ def render_configuration(api_template_file, env_config_file):
                 st.session_state.autosave_error = str(e)
                 st.error(f"Save failed: {e}")
 
-        # LOGIC: DELETE
         if delete_selected_clicked:
             to_delete = edited_api_df[edited_api_df["Select"] == True]
             if to_delete.empty:
@@ -345,10 +355,19 @@ def render_configuration(api_template_file, env_config_file):
                     use_container_width=True,
                     key=f"var_editor_{target_env['id']}"
                 )
-                    
-                if st.button("💾 Save Configuration", key="save_env_vars"):
-                    new_vars_list = json.loads(edited_vars.to_json(orient="records"))
-                    new_vars_list = [v for v in new_vars_list if v.get('key')]
-                    target_env['variables'] = new_vars_list
-                    save_json_file(env_config_file, st.session_state.environments)
-                    st.success(f"Saved configuration for {target_env.get('name')}")
+                    # LOGIC: AUTO-SAVE FOR ENVIRONMENT VARIABLES
+                has_var_changes = False
+                if not var_df.equals(edited_vars):
+                    has_var_changes = True
+
+                if has_var_changes:
+                    try:
+                        new_vars_list = json.loads(edited_vars.to_json(orient="records"))
+                        new_vars_list = [v for v in new_vars_list if v.get('key')]
+                        target_env['variables'] = new_vars_list
+                        save_json_file(env_config_file, st.session_state.environments)
+                        st.session_state.autosave_success = True
+                        st.session_state.save_timestamp = time.time()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Save failed: {e}")
