@@ -3,8 +3,12 @@ import os
 import uuid
 import datetime
 import requests
+import re
 from deepdiff import DeepDiff
 from urllib.parse import urljoin
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# --- Helpers ---
 
 def make_serializable(obj):
     """Recursively convert objects (like sets) to JSON-serializable types (lists)."""
@@ -12,12 +16,10 @@ def make_serializable(obj):
         return [make_serializable(x) for x in obj]
     if isinstance(obj, dict):
         return {k: make_serializable(v) for k, v in obj.items()}
-    # Handle DeepDiff's custom types if any
     if type(obj).__name__ == 'SetOrdered':
         return list(obj)
     return obj
 
-# --- File I/O ---
 def load_json_file(file_path):
     if os.path.exists(file_path):
         try:
@@ -31,76 +33,173 @@ def save_json_file(file_path, data):
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-# --- API Interaction ---
-def fetch_api_data(env, api_template, global_auth_token):
-    base_url = env['base_url'].rstrip('/') + '/'
-    relative_path = api_template['relative_path'].lstrip('/')
-    full_url = urljoin(base_url, relative_path)
-    
-    # Get token from environment config
-    auth_token = env.get('auth_token', '')
-    
-    env_headers = env.get('headers', {})
-    if isinstance(env_headers, str):
-        try:
-            env_headers = json.loads(env_headers)
-        except Exception:
-            env_headers = {}
-            
-    # Ensure it is a dict
-    if not isinstance(env_headers, dict):
-        env_headers = {}
+# --- Variable Logic ---
 
-    # Get API specific headers
+def render_template_string(template_str, context, used_keys=None):
+    """
+    Replace {{variable}} in template_str using values from context dict.
+    """
+    if not isinstance(template_str, str):
+        return template_str
+    
+    # regex for {{var}}, permissive on characters between curly braces
+    pattern = re.compile(r'\{\{\s*([^\}]+?)\s*\}\}')
+    
+    def replace_match(match):
+        var_name = match.group(1).strip()
+        if var_name in context:
+            if used_keys is not None:
+                used_keys.add(var_name)
+            return str(context.get(var_name))
+        return match.group(0) # Default to raw string if missing
+    
+    return pattern.sub(replace_match, template_str)
+
+def render_template_obj(obj, context, used_keys=None):
+    """
+    Recursively render templates in a dict/list structure.
+    """
+    if isinstance(obj, str):
+        return render_template_string(obj, context, used_keys)
+    elif isinstance(obj, list):
+        return [render_template_obj(item, context, used_keys) for item in obj]
+    elif isinstance(obj, dict):
+        return {k: render_template_obj(v, context, used_keys) for k, v in obj.items()}
+    return obj
+
+def extract_value_from_response(response_data, extraction_rules):
+    """
+    Extract values from JSON response based on rules.
+    rules: [{"source": "path.to.key", "target_var": "var_name"}]
+    Simple dot notation support for now.
+    """
+    extracted = {}
+    if not extraction_rules or not isinstance(extraction_rules, list):
+        return extracted
+        
+    for rule in extraction_rules:
+        # Determine format
+        # 1. Legacy: {"source": "a", "target_var": "b"}
+        if 'source' in rule and 'target_var' in rule:
+            items = [(rule['target_var'], rule['source'])]
+        else:
+            # 2. Key-Value: {"token": "$.result.token"}
+            items = list(rule.items())
+            
+        for target_var, source_path in items:
+            # Traverse
+            val = response_data
+            try:
+                parts = source_path.replace("$.", "").split('.')
+                for part in parts:
+                    if isinstance(val, dict):
+                        val = val.get(part)
+                    elif isinstance(val, list) and part.isdigit():
+                        val = val[int(part)]
+                    else:
+                        val = None
+                        break
+                
+                if val is not None:
+                    extracted[target_var] = val
+            except Exception:
+                pass # Extraction failed
+            
+    return extracted
+
+# --- API Interaction ---
+
+def fetch_api_data(env, api_template, runtime_context):
+    """
+    Execute API call using the Runtime Context for variable substitution.
+    """
+    # 0. Merge Context: Env Variables + API Runtime Variables
+    # Env variables are defined in environment config
+    # V2 Update: variables can be a dict OR a list of {key, value, description}
+    env_vars_raw = env.get('variables', {})
+    if isinstance(env_vars_raw, str):
+        try: env_vars_raw = json.loads(env_vars_raw)
+        except: env_vars_raw = {}
+    
+    env_vars = {}
+    if isinstance(env_vars_raw, list):
+        # Flatten list to dict and TRIM keys/values
+        for item in env_vars_raw:
+            if isinstance(item, dict) and 'key' in item:
+                k = item['key'].strip() if isinstance(item['key'], str) else item['key']
+                v = item.get('value', '')
+                v = v.strip() if isinstance(v, str) else v
+                env_vars[k] = v
+    elif isinstance(env_vars_raw, dict):
+        env_vars = {k.strip() if isinstance(k, str) else k: (v.strip() if isinstance(v, str) else v) for k, v in env_vars_raw.items()}
+            
+    # Combine: Runtime overrides Env
+    full_context = {**env_vars, **(runtime_context or {})}
+    used_keys = set()
+    
+    # 1. Render URL
+    try:
+        base_url_raw = env.get('base_url', '').rstrip('/') + '/'
+        base_url = render_template_string(base_url_raw, full_context, used_keys)
+        
+        rel_path_raw = api_template.get('relative_path', '').lstrip('/')
+        relative_path = render_template_string(rel_path_raw, full_context, used_keys)
+        
+        full_url = urljoin(base_url, relative_path)
+    except Exception as e:
+        return {"error": f"URL Construction Failed: {e}", "status": "failed"}
+    
+    # 2. Render Headers
+    auth_token = full_context.get('auth_token', '')
+    auth_token = render_template_string(auth_token, full_context, used_keys)
+    
+    env_headers = full_context.get('headers', {})
+    if isinstance(env_headers, str):
+        try: env_headers = json.loads(env_headers)
+        except: env_headers = {}
+    
     api_headers = api_template.get('headers', {})
     if isinstance(api_headers, str):
-        try:
-            api_headers = json.loads(api_headers)
-        except Exception:
-            api_headers = {}
-    if not isinstance(api_headers, dict):
-        api_headers = {}
+        try: api_headers = json.loads(api_headers)
+        except: api_headers = {}
+        
+    # Render values in headers
+    env_headers = render_template_obj(env_headers, full_context, used_keys)
+    api_headers = render_template_obj(api_headers, full_context, used_keys)
 
     headers = {
-        'Authorization': auth_token,
+        'Authorization': auth_token.strip() if isinstance(auth_token, str) else auth_token,
         'Content-Type': 'application/json',
-        **env_headers,
-        **api_headers # API headers override Env headers
+        **({k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in env_headers.items()} if isinstance(env_headers, dict) else {}),
+        **({k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in api_headers.items()} if isinstance(api_headers, dict) else {})
     }
     
-    # Debug Info
-    # Ensure params and json_body are parsed if they are strings
+    # 3. Render Params & Body
     params = api_template.get('params')
     if isinstance(params, str):
-        try:
-            params = json.loads(params) if params.strip() else None
-        except Exception:
-            params = None
+        try: params = json.loads(params) if params.strip() else None
+        except: params = None
+    params = render_template_obj(params, full_context, used_keys)
             
     json_body = api_template.get('json_body')
     if isinstance(json_body, str):
-        try:
-            json_body = json.loads(json_body) if json_body.strip() else None
-        except Exception:
-            # If it's not valid JSON but is a string, maybe it's meant to be raw data? 
-            # But we use json=... parameter which expects dict. 
-            # Let's assume if it fails parsing, we shouldn't send it as JSON object.
-            # But to be safe for this user's case (where they likely have JSON string), we try to parse.
-            json_body = None
-            
-    # Default to empty dict if None, as requested by user
-    if json_body is None:
-        json_body = {}
+        try: json_body = json.loads(json_body) if json_body.strip() else None
+        except: json_body = None
+    if json_body is None: json_body = {}
+    json_body = render_template_obj(json_body, full_context, used_keys)
 
-    # Update request_info to use the PARSED values
+    # Debug Info - Only include variables that were actually used
+    context_used_filtered = {k: full_context[k] for k in used_keys if k in full_context}
+    
     request_info = {
         "url": full_url,
         "method": api_template['method'],
         "headers": headers,
         "params": params,
-        "body": json_body
+        "body": json_body,
+        "context_used": context_used_filtered
     }
-    print(f"DEBUG REQUEST: {json.dumps(request_info, default=str)}") # Print to console for immediate debugging
+    print(f"DEBUG REQUEST: {json.dumps(request_info, default=str)}")
     
     try:
         response = requests.request(
@@ -111,115 +210,183 @@ def fetch_api_data(env, api_template, global_auth_token):
             headers=headers,
             timeout=10
         )
-        response.raise_for_status()
-        result = response.json()
+        # We don't raise for status immediately to allow inspection of 400s etc
+        # response.raise_for_status() 
+        try:
+            result = response.json()
+        except:
+            result = {"raw_text": response.text}
+            
+        # Add metadata
         if isinstance(result, dict):
+            result["_status_code"] = response.status_code
             result["_debug_request"] = request_info
+            
         return result
     except Exception as e:
         return {"error": str(e), "status": "failed", "_debug_request": request_info}
 
 # --- Comparison Logic ---
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# --- Comparison Logic ---
 def execute_comparison_run(selected_api_ids, selected_env_ids, environments, api_templates, progress_callback=None):
     """
-    Executes the comparison logic.
-    progress_callback: function(current_step, total_steps, message)
+    Executes comparison with Chaining support.
+    Logic:
+    1. Sort APIs by Order.
+    2. For each Environment:
+       - Run APIs sequentially.
+       - Update Context after each API if extraction rules exist.
     """
     selected_envs = [e for e in environments if e['id'] in selected_env_ids]
+    
+    # Filter and Sort Templates by Order
     selected_api_templates = [t for t in api_templates if t['id'] in selected_api_ids]
+    selected_api_templates.sort(key=lambda x: int(x.get('order', 0) or 0))
     
     run_id = str(uuid.uuid4())
     run_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     api_results = {}
-    total_steps = len(selected_api_templates) * len(selected_envs)
-    step_count = 0
-    
-    # Helper for parallel execution
-    def fetch_single(env, api_tpl):
-        try:
-            # fetch_api_data already handles header merging (Auth + Env + API)
-            data = fetch_api_data(env, api_tpl, None)
-            return env['id'], api_tpl['id'], data, env['name']
-        except Exception as e:
-            return env['id'], api_tpl['id'], {"error": str(e), "status": "failed"}, env['name']
-
-    # Initialize structure
+    # Init structure
     for api_tpl in selected_api_templates:
         api_results[api_tpl['id']] = {
             "id": api_tpl['id'],
             "name": api_tpl['name'],
+            "relative_path": api_tpl.get('relative_path', ''),
+            "order": api_tpl.get('order', 0),
             "data_by_env": {},
             "comparisons": {},
             "overall_status": "Consistent"
         }
 
-    # 1. Fetch Data in Parallel
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = []
+    total_steps = len(selected_api_templates) * len(selected_envs)
+    step_count = 0
+    
+    # Helper to run a whole sequence for ONE env
+    def run_sequence_for_env(env):
+        results = {} # api_id -> data
+        runtime_context = {} 
+        
         for api_tpl in selected_api_templates:
-            for env in selected_envs:
-                futures.append(executor.submit(fetch_single, env, api_tpl))
+            # 1. Fetch
+            data = fetch_api_data(env, api_tpl, runtime_context)
+            results[api_tpl['id']] = data
+            
+            # 2. Extract Variables
+            extract_rules = api_tpl.get('extract')
+            if isinstance(extract_rules, str):
+                try: extract_rules = json.loads(extract_rules)
+                except: extract_rules = []
+            
+            if extract_rules and isinstance(data, dict):
+                 new_vars = extract_value_from_response(data, extract_rules)
+                 
+                 # 2a. Update Runtime Context (For next API in chain)
+                 runtime_context.update(new_vars)
+                 
+                 # 2b. Persist to Environment (Session State)
+                 # New requirement: "Refresh if exists, Create if not"
+                 # env['variables'] is a list of dicts: [{"key": "k", "value": "v", ...}]
+                 if 'variables' not in env or not isinstance(env['variables'], list):
+                     env['variables'] = []
+                 
+                 for key, value in new_vars.items():
+                     str_val = str(value)
+                     # Find existing
+                     found = False
+                     for var_item in env['variables']:
+                         if var_item.get('key') == key:
+                             var_item['value'] = str_val
+                             found = True
+                             break
+                     if not found:
+                         env['variables'].append({
+                             "key": key,
+                             "value": str_val,
+                             "description": "Auto-extracted"
+                         })
+                 
+        return env['id'], results
+
+    # Run Environments in Parallel (Each Env runs its own chain sequentially)
+    environment_results = {} # env_id -> {api_id: data}
+    
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(run_sequence_for_env, env): env for env in selected_envs}
         
         for future in as_completed(futures):
-            env_id, api_id, data, env_name = future.result()
+            env = futures[future]
+            try:
+                env_id, seq_results = future.result()
+                environment_results[env_id] = seq_results
+            except Exception as e:
+                print(f"Error running sequence for {env['name']}: {e}")
+            
+            # Rough progress (completed 1 env = N steps)
+            step_count += len(selected_api_templates)
+            if progress_callback:
+                 progress_callback(min(step_count, total_steps), total_steps, f"Processed {env['name']}")
+
+    # Re-structure for Comparison View (Pivot results)
+    for env_id, seq_results in environment_results.items():
+        env_name = next(e['name'] for e in selected_envs if e['id'] == env_id)
+        for api_id, data in seq_results.items():
             api_results[api_id]["data_by_env"][env_id] = {
                 "env_name": env_name,
                 "data": data
             }
-            step_count += 1
-            if progress_callback:
-                progress_callback(step_count, total_steps, f"Fetched {step_count}/{total_steps} requests")
 
-    # 2. Compare (All vs First)
+    # Compare (All vs Ref)
     for api_tpl in selected_api_templates:
         api_id = api_tpl['id']
-        # Ensure we have data for all envs (in case of catastrophic failure, though fetch returns error dict)
-        if len(api_results[api_id]["data_by_env"]) < len(selected_envs):
-             api_results[api_id]["overall_status"] = "Error"
-             continue
+        
+        # Check if we have data (might be missing if env run failed)
+        if not api_results[api_id]["data_by_env"]:
+            api_results[api_id]["overall_status"] = "Error"
+            continue
 
         ref_env = selected_envs[0]
+        if ref_env['id'] not in api_results[api_id]["data_by_env"]:
+             api_results[api_id]["overall_status"] = "Error"
+             continue
+             
         ref_entry = api_results[api_id]["data_by_env"][ref_env['id']]
         ref_data = ref_entry['data']
         
-        # Prepare clean data for comparison (remove debug info)
-        clean_ref_data = ref_data.copy() if isinstance(ref_data, dict) else ref_data
-        if isinstance(clean_ref_data, dict) and "_debug_request" in clean_ref_data:
-            del clean_ref_data["_debug_request"]
+        # Clean data keys starting with _ (debug/status)
+        clean_ref = {k:v for k,v in ref_data.items() if not k.startswith('_')} if isinstance(ref_data, dict) else ref_data
 
         diff_options = {
             'ignore_order': api_tpl.get('ignore_order', False),
             'exclude_paths': api_tpl.get('ignore_paths', [])
         }
-        
         for i in range(1, len(selected_envs)):
             target_env = selected_envs[i]
+            if target_env['id'] not in api_results[api_id]["data_by_env"]:
+                continue
+                
             target_entry = api_results[api_id]["data_by_env"][target_env['id']]
             target_data = target_entry['data']
             
-            # Prepare clean target data
-            clean_target_data = target_data.copy() if isinstance(target_data, dict) else target_data
-            if isinstance(clean_target_data, dict) and "_debug_request" in clean_target_data:
-                del clean_target_data["_debug_request"]
+            # Clean data keys starting with _ (debug/status)
+            clean_target = {k:v for k,v in target_data.items() if not k.startswith('_')} if isinstance(target_data, dict) else target_data
             
             comp_key = f"{ref_env['name']} vs {target_env['name']}"
             
-            if "error" in clean_ref_data or "error" in clean_target_data:
-                status = "Error"
-                diff_output = "API Request Failed"
-            else:
-                ddiff = DeepDiff(clean_ref_data, clean_target_data, **diff_options)
-                if ddiff:
-                    status = "Inconsistent"
-                    # Convert DeepDiff object to a serializable dict and handle SetOrdered
-                    diff_output = make_serializable(ddiff.to_dict())
+            # Use DeepDiff to check for consistency
+            ddiff = DeepDiff(clean_ref, clean_target, **diff_options)
+            
+            if ddiff:
+                # If they are different, check if it's because of an error
+                if (isinstance(clean_ref, dict) and "error" in clean_ref) or (isinstance(clean_target, dict) and "error" in clean_target):
+                    status = "Error"
                 else:
-                    status = "Consistent"
-                    diff_output = None
+                    status = "Inconsistent"
+                diff_output = make_serializable(ddiff.to_dict())
+            else:
+                # Both are identical (even if they both failed with the same error)
+                status = "Consistent"
+                diff_output = None
             
             api_results[api_id]["comparisons"][comp_key] = {"status": status, "diff": diff_output}
             if status != "Consistent":
@@ -238,6 +405,7 @@ def execute_comparison_run(selected_api_ids, selected_env_ids, environments, api
     
     return run_summary
 
+# --- OpenAPI Parsing Stub (Kept simple) ---
 # --- OpenAPI Parsing ---
 def generate_example_from_schema(schema, definitions=None):
     """
@@ -441,4 +609,4 @@ def parse_apifox_project(imported_data):
     for module in api_collection:
         extract_cases(module)
         
-    return new_apis
+    return new_apis 

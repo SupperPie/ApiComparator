@@ -21,7 +21,7 @@ MarkupSafe
 narwhals
 numpy
 orderly-set
-packaging
+packaging<25
 pandas
 pillow
 protobuf
@@ -32,7 +32,7 @@ python-dotenv
 pytz
 PyYAML
 referencing
-requests
+requests>=2.27.0
 rpds-py
 six
 smmap
@@ -47,3 +47,5 @@ uvicorn
 uvloop
 watchfiles
 websockets
+reportlab
+python-docx

@@ -43,3 +43,9 @@ secrets.toml
 
 # OS
 .DS_Store
+
+# Data
+data/
+
+# Data
+data/
