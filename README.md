@@ -1,4 +1,9 @@
 # ⚡ API Comparator Pro
+<img width="3348" height="1726" alt="image" src="https://github.com/user-attachments/assets/88e6a5b4-1979-4dfb-8c29-0ba39ea36f9a" />
+<img width="3258" height="1652" alt="image" src="https://github.com/user-attachments/assets/0860cce8-b293-4ae1-bdb0-6f3db52514f4" />
+<img width="3382" height="1666" alt="image" src="https://github.com/user-attachments/assets/0d3a447c-dfa0-4cc2-9561-0e7fef28b418" />
+
+
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://streamlit.io)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
